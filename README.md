@@ -2,7 +2,7 @@
 
 A lightweight VS Code extension that displays a **Table of Contents** for the active markdown file in the Explorer panel.
 
-![Markdown Index in action](https://raw.githubusercontent.com/felipecastro/markdown-index/main/resources/screenshot.png)
+![Markdown Index in action](https://raw.githubusercontent.com/FelipeDeCastro/markdown-index/main/resources/screenshot.png)
 
 ## Features
 
