@@ -2,7 +2,7 @@
   "name": "md-index-explorer",
   "displayName": "Markdown Index",
   "description": "A lightweight Table of Contents for markdown files, displayed in the Explorer panel.",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "publisher": "felipedecastro",
   "license": "MIT",
   "icon": "resources/icon.png",
@@ -89,7 +89,12 @@
       "view/item/context": [
         {
           "command": "markdownIndex.revealInPreview",
-          "when": "(view == markdownIndex || view == markdownIndexSidebarView) && viewItem == heading",
+          "when": "(view == markdownIndex || view == markdownIndexSidebarView) && viewItem == heading && config.markdownIndex.clickAction != 'preview'",
+          "group": "inline"
+        },
+        {
+          "command": "markdownIndex.revealInEditor",
+          "when": "(view == markdownIndex || view == markdownIndexSidebarView) && viewItem == heading && config.markdownIndex.clickAction == 'preview'",
           "group": "inline"
         },
         {
@@ -113,7 +118,7 @@
             "editor",
             "preview"
           ],
-          "default": "editor",
+          "default": "preview",
           "description": "Where to navigate when clicking a heading: open in the editor or in the markdown preview."
         },
         "markdownIndex.location": {

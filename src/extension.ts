@@ -61,7 +61,7 @@ export function activate(context: vscode.ExtensionContext): void {
       async (node: HeadingNode) => {
         const action = vscode.workspace
           .getConfiguration('markdownIndex')
-          .get<string>('clickAction', 'editor');
+          .get<string>('clickAction', 'preview');
         if (action === 'preview') {
           await revealInPreview(node);
         } else {
