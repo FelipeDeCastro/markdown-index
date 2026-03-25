@@ -1,5 +1,5 @@
 {
-  "name": "markdown-index",
+  "name": "md-index-explorer",
   "displayName": "Markdown Index",
   "description": "A lightweight Table of Contents for markdown files, displayed in the Explorer panel.",
   "version": "0.1.0",
