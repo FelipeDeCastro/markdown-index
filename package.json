@@ -2,7 +2,7 @@
   "name": "md-index-explorer",
   "displayName": "Markdown Index",
   "description": "A lightweight Table of Contents for markdown files, displayed in the Explorer panel.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "felipedecastro",
   "license": "MIT",
   "icon": "resources/icon.png",
@@ -110,13 +110,19 @@
       "properties": {
         "markdownIndex.clickAction": {
           "type": "string",
-          "enum": ["editor", "preview"],
+          "enum": [
+            "editor",
+            "preview"
+          ],
           "default": "editor",
           "description": "Where to navigate when clicking a heading: open in the editor or in the markdown preview."
         },
         "markdownIndex.location": {
           "type": "string",
-          "enum": ["explorer", "sidebar"],
+          "enum": [
+            "explorer",
+            "sidebar"
+          ],
           "enumDescriptions": [
             "Show inside the Explorer panel",
             "Show as its own icon in the sidebar"
