@@ -1,0 +1,73 @@
+{
+  "name": "markdown-index",
+  "displayName": "Markdown Index",
+  "description": "A lightweight Table of Contents for markdown files, displayed in the Explorer panel.",
+  "version": "0.1.0",
+  "publisher": "TO_BE_SET",
+  "license": "MIT",
+  "icon": "resources/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TO_BE_SET/markdown-index"
+  },
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "markdown",
+    "table of contents",
+    "toc",
+    "outline",
+    "index",
+    "headings"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "views": {
+      "explorer": [
+        {
+          "id": "markdownIndex",
+          "name": "Markdown Index",
+          "icon": "$(list-tree)",
+          "contextualTitle": "Markdown Index"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "markdownIndex.revealHeading",
+        "title": "Go to Heading",
+        "category": "Markdown Index"
+      },
+      {
+        "command": "markdownIndex.refresh",
+        "title": "Refresh",
+        "category": "Markdown Index",
+        "icon": "$(refresh)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "markdownIndex.refresh",
+          "when": "view == markdownIndex",
+          "group": "navigation"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "@types/vscode": "^1.74.0",
+    "typescript": "^5.0.0"
+  }
+}

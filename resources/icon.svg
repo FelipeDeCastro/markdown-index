@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4FC3F7;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1976D2;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <!-- Rounded background -->
+  <rect x="0" y="0" width="256" height="256" rx="40" ry="40" fill="url(#bg)" />
+  <!-- Document shape -->
+  <rect x="50" y="30" width="156" height="196" rx="12" ry="12" fill="white" opacity="0.95" />
+  <!-- Heading lines (TOC style, indented) -->
+  <!-- H1 line -->
+  <rect x="72" y="60" width="112" height="12" rx="6" fill="#1976D2" opacity="0.85" />
+  <!-- H2 line -->
+  <rect x="88" y="88" width="96" height="10" rx="5" fill="#42A5F5" opacity="0.75" />
+  <!-- H3 line -->
+  <rect x="104" y="112" width="80" height="8" rx="4" fill="#64B5F6" opacity="0.65" />
+  <!-- H2 line -->
+  <rect x="88" y="136" width="96" height="10" rx="5" fill="#42A5F5" opacity="0.75" />
+  <!-- H3 line -->
+  <rect x="104" y="160" width="80" height="8" rx="4" fill="#64B5F6" opacity="0.65" />
+  <!-- H1 line -->
+  <rect x="72" y="186" width="112" height="12" rx="6" fill="#1976D2" opacity="0.85" />
+  <!-- Small hash symbol top-left of doc -->
+  <text x="58" y="52" font-family="monospace" font-weight="bold" font-size="18" fill="#1976D2" opacity="0.6">#</text>
+</svg>
