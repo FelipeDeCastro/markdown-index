@@ -3,6 +3,7 @@ import { HeadingNode } from './headingParser';
 import { HeadingTreeProvider } from './headingProvider';
 
 export function activate(context: vscode.ExtensionContext): void {
+  console.log('Markdown Index extension is now active.');
   const provider = new HeadingTreeProvider();
 
   const treeView = vscode.window.createTreeView('markdownIndex', {

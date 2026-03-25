@@ -7,5 +7,4 @@ src/
 node_modules/
 out/**/*.map
 **/*.vsix
-**/*.svg
 .DS_Store
