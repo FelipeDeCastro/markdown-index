@@ -3,12 +3,12 @@
   "displayName": "Markdown Index",
   "description": "A lightweight Table of Contents for markdown files, displayed in the Explorer panel.",
   "version": "0.1.0",
-  "publisher": "TO_BE_SET",
+  "publisher": "felipecastro",
   "license": "MIT",
   "icon": "resources/icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/TO_BE_SET/markdown-index"
+    "url": "https://github.com/felipecastro/markdown-index"
   },
   "engines": {
     "vscode": "^1.74.0"
