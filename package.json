@@ -3,7 +3,7 @@
   "displayName": "Markdown Index",
   "description": "A lightweight Table of Contents for markdown files, displayed in the Explorer panel.",
   "version": "0.1.0",
-  "publisher": "felipecastro",
+  "publisher": "felipedecastro",
   "license": "MIT",
   "icon": "resources/icon.png",
   "repository": {
@@ -44,6 +44,18 @@
         "category": "Markdown Index"
       },
       {
+        "command": "markdownIndex.revealInEditor",
+        "title": "Reveal in Editor",
+        "category": "Markdown Index",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "markdownIndex.revealInPreview",
+        "title": "Reveal in Preview",
+        "category": "Markdown Index",
+        "icon": "$(open-preview)"
+      },
+      {
         "command": "markdownIndex.refresh",
         "title": "Refresh",
         "category": "Markdown Index",
@@ -57,7 +69,35 @@
           "when": "view == markdownIndex",
           "group": "navigation"
         }
+      ],
+      "view/item/context": [
+        {
+          "command": "markdownIndex.revealInPreview",
+          "when": "view == markdownIndex && viewItem == heading",
+          "group": "inline"
+        },
+        {
+          "command": "markdownIndex.revealInEditor",
+          "when": "view == markdownIndex",
+          "group": "navigation@1"
+        },
+        {
+          "command": "markdownIndex.revealInPreview",
+          "when": "view == markdownIndex",
+          "group": "navigation@2"
+        }
       ]
+    },
+    "configuration": {
+      "title": "Markdown Index",
+      "properties": {
+        "markdownIndex.clickAction": {
+          "type": "string",
+          "enum": ["editor", "preview"],
+          "default": "editor",
+          "description": "Where to navigate when clicking a heading: open in the editor or in the markdown preview."
+        }
+      }
     }
   },
   "scripts": {

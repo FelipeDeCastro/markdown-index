@@ -6,17 +6,31 @@ export class HeadingTreeProvider implements vscode.TreeDataProvider<HeadingNode>
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
   private roots: HeadingNode[] = [];
-  private hasDocument = false;
+  private _documentUri: vscode.Uri | undefined;
+
+  /** The URI of the markdown document currently shown in the tree. */
+  get documentUri(): vscode.Uri | undefined {
+    return this._documentUri;
+  }
 
   refresh(document: vscode.TextDocument | undefined): void {
     if (document && document.languageId === 'markdown') {
-      this.hasDocument = true;
+      this._documentUri = document.uri;
       const headings = parseHeadings(document.getText());
       this.roots = buildTree(headings);
-    } else {
-      this.hasDocument = false;
+      this._onDidChangeTreeData.fire();
+    } else if (document) {
+      // Switched to a non-markdown editor — clear the tree.
+      this._documentUri = undefined;
       this.roots = [];
+      this._onDidChangeTreeData.fire();
     }
+    // If document is undefined (e.g. preview focused), keep current headings.
+  }
+
+  clear(): void {
+    this._documentUri = undefined;
+    this.roots = [];
     this._onDidChangeTreeData.fire();
   }
 
@@ -30,7 +44,7 @@ export class HeadingTreeProvider implements vscode.TreeDataProvider<HeadingNode>
     );
     item.description = `H${node.level}`;
     item.tooltip = `${node.text} — line ${node.line + 1}`;
-    item.iconPath = new vscode.ThemeIcon('symbol-structure');
+    item.contextValue = 'heading';
     item.command = {
       command: 'markdownIndex.revealHeading',
       title: 'Go to Heading',

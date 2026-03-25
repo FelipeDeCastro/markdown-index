@@ -9,15 +9,36 @@ export interface HeadingNode extends Heading {
 }
 
 const HEADING_RE = /^(#{1,6})\s+(.+?)(?:\s+#+\s*)?$/;
+const FENCE_RE = /^(`{3,}|~{3,})/;
 
 /**
- * Extract flat headings from markdown text.
+ * Extract flat headings from markdown text, skipping fenced code blocks.
  */
 export function parseHeadings(text: string): Heading[] {
   const headings: Heading[] = [];
   const lines = text.split('\n');
+  let inFence = false;
+  let fenceChar = '';
+  let fenceLen = 0;
 
   for (let i = 0; i < lines.length; i++) {
+    const fenceMatch = lines[i].match(FENCE_RE);
+    if (fenceMatch) {
+      if (!inFence) {
+        inFence = true;
+        fenceChar = fenceMatch[1][0];
+        fenceLen = fenceMatch[1].length;
+      } else if (
+        fenceMatch[1][0] === fenceChar &&
+        fenceMatch[1].length >= fenceLen
+      ) {
+        inFence = false;
+      }
+      continue;
+    }
+    if (inFence) {
+      continue;
+    }
     const match = lines[i].match(HEADING_RE);
     if (match) {
       headings.push({
