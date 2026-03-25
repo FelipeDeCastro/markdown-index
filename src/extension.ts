@@ -8,12 +8,10 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const treeView = vscode.window.createTreeView('markdownIndex', {
     treeDataProvider: provider,
-    showCollapseAll: true,
   });
 
   const sidebarTreeView = vscode.window.createTreeView('markdownIndexSidebarView', {
     treeDataProvider: provider,
-    showCollapseAll: true,
   });
 
   // --- Helpers ---
@@ -85,6 +83,46 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
   );
 
+  context.subscriptions.push(
+    vscode.commands.registerCommand('markdownIndex.collapseAll', async () => {
+      provider.collapseAll();
+      await vscode.commands.executeCommand('setContext', 'markdownIndex.allCollapsed', true);
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('markdownIndex.expandAll', async () => {
+      provider.expandAll();
+      await vscode.commands.executeCommand('setContext', 'markdownIndex.allCollapsed', false);
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('markdownIndex.search', async () => {
+      const term = await vscode.window.showInputBox({
+        prompt: 'Filter headings by term',
+        value: provider.filterTerm ?? '',
+      });
+      if (term === undefined) {
+        return; // cancelled
+      }
+      if (term === '') {
+        provider.setFilter(undefined);
+        await vscode.commands.executeCommand('setContext', 'markdownIndex.isFiltered', false);
+      } else {
+        provider.setFilter(term);
+        await vscode.commands.executeCommand('setContext', 'markdownIndex.isFiltered', true);
+      }
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('markdownIndex.clearSearch', async () => {
+      provider.setFilter(undefined);
+      await vscode.commands.executeCommand('setContext', 'markdownIndex.isFiltered', false);
+    }),
+  );
+
   // --- Editor tracking ---
 
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
@@ -97,7 +135,12 @@ export function activate(context: vscode.ExtensionContext): void {
   };
 
   context.subscriptions.push(
-    vscode.window.onDidChangeActiveTextEditor((editor) => {
+    vscode.window.onDidChangeActiveTextEditor(async (editor) => {
+      if (provider.filterTerm) {
+        provider.setFilter(undefined);
+        await vscode.commands.executeCommand('setContext', 'markdownIndex.isFiltered', false);
+      }
+      await vscode.commands.executeCommand('setContext', 'markdownIndex.allCollapsed', false);
       provider.refresh(editor?.document);
     }),
   );

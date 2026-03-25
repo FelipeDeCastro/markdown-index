@@ -2,7 +2,7 @@
   "name": "md-index-explorer",
   "displayName": "Markdown Index",
   "description": "A lightweight Table of Contents for markdown files, displayed in the Explorer panel.",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "publisher": "felipedecastro",
   "license": "MIT",
   "icon": "resources/icon.png",
@@ -76,10 +76,54 @@
         "title": "Refresh",
         "category": "Markdown Index",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "markdownIndex.collapseAll",
+        "title": "Collapse All",
+        "category": "Markdown Index",
+        "icon": "$(collapse-all)"
+      },
+      {
+        "command": "markdownIndex.expandAll",
+        "title": "Expand All",
+        "category": "Markdown Index",
+        "icon": "$(expand-all)"
+      },
+      {
+        "command": "markdownIndex.search",
+        "title": "Search Headings",
+        "category": "Markdown Index",
+        "icon": "$(search)"
+      },
+      {
+        "command": "markdownIndex.clearSearch",
+        "title": "Clear Search",
+        "category": "Markdown Index",
+        "icon": "$(search-stop)"
       }
     ],
     "menus": {
       "view/title": [
+        {
+          "command": "markdownIndex.collapseAll",
+          "when": "(view == markdownIndex || view == markdownIndexSidebarView) && !markdownIndex.allCollapsed",
+          "group": "navigation"
+        },
+        {
+          "command": "markdownIndex.expandAll",
+          "when": "(view == markdownIndex || view == markdownIndexSidebarView) && markdownIndex.allCollapsed",
+          "group": "navigation"
+        },
+        {
+          "command": "markdownIndex.search",
+          "when": "view == markdownIndex || view == markdownIndexSidebarView",
+          "group": "navigation"
+        },
+        {
+          "command": "markdownIndex.clearSearch",
+          "when": "(view == markdownIndex || view == markdownIndexSidebarView) && markdownIndex.isFiltered",
+          "group": "navigation"
+        },
         {
           "command": "markdownIndex.refresh",
           "when": "view == markdownIndex || view == markdownIndexSidebarView",
@@ -131,7 +175,7 @@
             "Show inside the Explorer panel",
             "Show as its own icon in the sidebar"
           ],
-          "default": "explorer",
+          "default": "sidebar",
           "description": "Where to display the Markdown Index view."
         }
       }
