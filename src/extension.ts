@@ -10,6 +10,11 @@ export function activate(context: vscode.ExtensionContext): void {
     showCollapseAll: true,
   });
 
+  const sidebarTreeView = vscode.window.createTreeView('markdownIndexSidebarView', {
+    treeDataProvider: provider,
+    showCollapseAll: true,
+  });
+
   // --- Helpers ---
 
   async function revealInEditor(node: HeadingNode): Promise<void> {
@@ -105,7 +110,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
   );
 
-  context.subscriptions.push(treeView);
+  context.subscriptions.push(treeView, sidebarTreeView);
 
   // Initialize with current editor
   provider.refresh(vscode.window.activeTextEditor?.document);

@@ -27,13 +27,30 @@
   "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "markdownIndexSidebar",
+          "title": "Markdown Index",
+          "icon": "resources/sidebar-icon.svg"
+        }
+      ]
+    },
     "views": {
       "explorer": [
         {
           "id": "markdownIndex",
           "name": "Markdown Index",
-          "icon": "$(list-tree)",
-          "contextualTitle": "Markdown Index"
+          "contextualTitle": "Markdown Index",
+          "when": "config.markdownIndex.location == 'explorer'"
+        }
+      ],
+      "markdownIndexSidebar": [
+        {
+          "id": "markdownIndexSidebarView",
+          "name": "Markdown Index",
+          "contextualTitle": "Markdown Index",
+          "when": "config.markdownIndex.location == 'sidebar'"
         }
       ]
     },
@@ -66,24 +83,24 @@
       "view/title": [
         {
           "command": "markdownIndex.refresh",
-          "when": "view == markdownIndex",
+          "when": "view == markdownIndex || view == markdownIndexSidebarView",
           "group": "navigation"
         }
       ],
       "view/item/context": [
         {
           "command": "markdownIndex.revealInPreview",
-          "when": "view == markdownIndex && viewItem == heading",
+          "when": "(view == markdownIndex || view == markdownIndexSidebarView) && viewItem == heading",
           "group": "inline"
         },
         {
           "command": "markdownIndex.revealInEditor",
-          "when": "view == markdownIndex",
+          "when": "view == markdownIndex || view == markdownIndexSidebarView",
           "group": "navigation@1"
         },
         {
           "command": "markdownIndex.revealInPreview",
-          "when": "view == markdownIndex",
+          "when": "view == markdownIndex || view == markdownIndexSidebarView",
           "group": "navigation@2"
         }
       ]
@@ -96,6 +113,16 @@
           "enum": ["editor", "preview"],
           "default": "editor",
           "description": "Where to navigate when clicking a heading: open in the editor or in the markdown preview."
+        },
+        "markdownIndex.location": {
+          "type": "string",
+          "enum": ["explorer", "sidebar"],
+          "enumDescriptions": [
+            "Show inside the Explorer panel",
+            "Show as its own icon in the sidebar"
+          ],
+          "default": "explorer",
+          "description": "Where to display the Markdown Index view."
         }
       }
     }
