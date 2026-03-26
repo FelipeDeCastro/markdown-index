@@ -27,7 +27,7 @@ export function activate(context: vscode.ExtensionContext): void {
       return;
     }
     const range = editor.document.lineAt(node.line).range;
-    editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
+    editor.revealRange(range, vscode.TextEditorRevealType.AtTop);
     editor.selection = new vscode.Selection(range.start, range.start);
   }
 
@@ -44,7 +44,7 @@ export function activate(context: vscode.ExtensionContext): void {
       preserveFocus: false,
     });
     const range = doc.lineAt(node.line).range;
-    editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
+    editor.revealRange(range, vscode.TextEditorRevealType.AtTop);
     editor.selection = new vscode.Selection(range.start, range.start);
 
     // Open / focus the markdown preview (syncs to cursor position).
