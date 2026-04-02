@@ -8,3 +8,4 @@ node_modules/
 out/**/*.map
 **/*.vsix
 .DS_Store
+SKILL.md
