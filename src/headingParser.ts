@@ -12,7 +12,7 @@ const HEADING_RE = /^(#{1,6})\s+(.+?)(?:\s+#+\s*)?$/;
 const FENCE_RE = /^(`{3,}|~{3,})/;
 
 /**
- * Extract flat headings from markdown text, skipping fenced code blocks.
+ * Extract flat headings from markdown text, skipping fenced code blocks and YAML frontmatter.
  */
 export function parseHeadings(text: string): Heading[] {
   const headings: Heading[] = [];
@@ -21,7 +21,18 @@ export function parseHeadings(text: string): Heading[] {
   let fenceChar = '';
   let fenceLen = 0;
 
-  for (let i = 0; i < lines.length; i++) {
+  // Determine start index, skipping YAML frontmatter (--- ... ---) at the top of the file.
+  let startIndex = 0;
+  if (lines[0]?.trimEnd() === '---') {
+    for (let j = 1; j < lines.length; j++) {
+      if (lines[j]?.trimEnd() === '---' || lines[j]?.trimEnd() === '...') {
+        startIndex = j + 1;
+        break;
+      }
+    }
+  }
+
+  for (let i = startIndex; i < lines.length; i++) {
     const fenceMatch = lines[i].match(FENCE_RE);
     if (fenceMatch) {
       if (!inFence) {
