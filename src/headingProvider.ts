@@ -1,6 +1,9 @@
 import * as vscode from 'vscode';
 import { HeadingNode, buildTree, parseHeadings } from './headingParser';
 
+// VS Code's built-in prompt-basics extension assigns these language IDs to markdown-like files.
+const MARKDOWN_LIKE_LANGUAGES = new Set(['markdown', 'skill', 'prompt', 'instructions', 'chatagent']);
+
 export class HeadingTreeProvider implements vscode.TreeDataProvider<HeadingNode> {
   private _onDidChangeTreeData = new vscode.EventEmitter<HeadingNode | undefined | void>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
@@ -44,7 +47,7 @@ export class HeadingTreeProvider implements vscode.TreeDataProvider<HeadingNode>
   }
 
   refresh(document: vscode.TextDocument | undefined): void {
-    if (document && document.languageId === 'markdown') {
+    if (document && MARKDOWN_LIKE_LANGUAGES.has(document.languageId)) {
       this._documentUri = document.uri;
       const headings = parseHeadings(document.getText());
       this.roots = buildTree(headings);
@@ -53,7 +56,7 @@ export class HeadingTreeProvider implements vscode.TreeDataProvider<HeadingNode>
         : undefined;
       this._expandState = 'initial';
       this._onDidChangeTreeData.fire();
-    } else if (document) {
+    } else if (document && !MARKDOWN_LIKE_LANGUAGES.has(document.languageId)) {
       // Switched to a non-markdown editor — clear the tree.
       this._documentUri = undefined;
       this.roots = [];

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.4 — 2026-04-02
+
+- Fix: show headings for `SKILL.md`, `.prompt.md`, `.instructions.md`, and `.agent.md` files (VS Code assigns them non-markdown language IDs via the built-in `prompt-basics` extension).
+
 ## 0.6.3 — 2026-04-02
 
 - Remove SKILL.md from the packaged extension.
