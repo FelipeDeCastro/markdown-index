@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.3 — 2026-04-02
+
+- Remove SKILL.md from the packaged extension.
+
 ## 0.6.2 — 2026-04-02
 
 - Fix: skip YAML frontmatter when parsing headings so front-matter content is not shown in the index.
