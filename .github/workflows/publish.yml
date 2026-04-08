@@ -1,0 +1,79 @@
+name: Build and Publish Extension
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  NODE_VERSION: 18
+
+jobs:
+  build-package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: npm ci
+      - run: npm run compile
+      - name: Package VSIX
+        id: package
+        run: npx vsce package -o extension.vsix && echo "vsix=extension.vsix" >> $GITHUB_OUTPUT
+      - uses: actions/upload-artifact@v4
+        with:
+          name: extension-vsix
+          path: extension.vsix
+
+  release:
+    needs: build-package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: extension-vsix
+          path: .
+      - name: Create GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ github.sha }}
+          release_name: Release ${{ github.sha }}
+          draft: false
+          prerelease: false
+      - name: Upload VSIX to Release
+        uses: softprops/action-upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./extension.vsix
+          asset_name: extension.vsix
+          asset_content_type: application/octet-stream
+
+  publish-marketplaces:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm ci
+      - run: npm run compile
+      - name: Publish to Visual Studio Marketplace (requires VSCE_TOKEN secret)
+        if: secrets.VSCE_TOKEN != ''
+        env:
+          VSCE_TOKEN: ${{ secrets.VSCE_TOKEN }}
+        run: |
+          npm i -g vsce || true
+          # Adjust the publish command if your setup differs. This attempts to use the token provided.
+          npx vsce publish --pat $VSCE_TOKEN || echo "VSCE publish failed; check VSCE_TOKEN or vsce usage"
+
+      - name: Publish to Open VSX (requires OPEN_VSX_TOKEN secret)
+        if: secrets.OPEN_VSX_TOKEN != ''
+        env:
+          OPEN_VSX_TOKEN: ${{ secrets.OPEN_VSX_TOKEN }}
+        run: |
+          npm i -g ovsx || true
+          npx ovsx publish --token $OPEN_VSX_TOKEN || echo "Open VSX publish failed; check OPEN_VSX_TOKEN or ovsx usage"
