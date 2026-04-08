@@ -3,7 +3,7 @@
   "displayName": "Markdown Index",
   "description": "A lightweight Table of Contents for markdown files, displayed in the Explorer panel.",
   "version": "0.6.4",
-  "publisher": "felipedecastro",
+  "publisher": "FelipeDeCastro",
   "license": "MIT",
   "icon": "resources/icon.png",
   "repository": {

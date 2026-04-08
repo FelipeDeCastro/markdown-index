@@ -158,6 +158,59 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // Initialize with current editor
   provider.refresh(vscode.window.activeTextEditor?.document);
+
+  // Helper to open preview for an active or visible markdown editor.
+  async function openPreviewForActiveOrVisibleMarkdown(): Promise<void> {
+    try {
+      const isMarkdownEditor = (editor?: vscode.TextEditor) =>
+        !!editor &&
+        (editor.document.languageId === 'markdown' ||
+          editor.document.uri.path.toLowerCase().endsWith('.md'));
+
+      const active = vscode.window.activeTextEditor;
+      let targetEditor: vscode.TextEditor | undefined = undefined;
+
+      if (isMarkdownEditor(active)) {
+        targetEditor = active;
+      } else {
+        targetEditor = vscode.window.visibleTextEditors.find(isMarkdownEditor);
+      }
+
+      if (!targetEditor) {
+        return;
+      }
+
+      // Ensure the document is visible and focused so the markdown preview command targets it.
+      await vscode.window.showTextDocument(targetEditor.document, {
+        preview: false,
+        preserveFocus: false,
+      });
+
+      // Open the Markdown preview in the same column (replaces/focuses the editor).
+      await vscode.commands.executeCommand('markdown.showPreview', targetEditor.document.uri);
+    } catch (err) {
+      // Fail silently — preview is a convenience feature.
+      // eslint-disable-next-line no-console
+      console.error('markdown-index: failed to open preview', err);
+    }
+  }
+
+  // Auto-open once on activation
+  void openPreviewForActiveOrVisibleMarkdown();
+
+  // Also open every time the view becomes visible (user clicks the extension view).
+  context.subscriptions.push(
+    treeView.onDidChangeVisibility((e) => {
+      if (e.visible) {
+        void openPreviewForActiveOrVisibleMarkdown();
+      }
+    }),
+    sidebarTreeView.onDidChangeVisibility((e) => {
+      if (e.visible) {
+        void openPreviewForActiveOrVisibleMarkdown();
+      }
+    }),
+  );
 }
 
 export function deactivate(): void {
