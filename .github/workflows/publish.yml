@@ -6,6 +6,10 @@ on:
       - main
   workflow_dispatch:
 
+permissions:
+  contents: write
+  packages: write
+
 env:
   NODE_VERSION: 20
 
