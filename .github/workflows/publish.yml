@@ -74,9 +74,21 @@ jobs:
           VSCE_TOKEN: ${{ secrets.VSCE_TOKEN }}
         run: |
           if [ -n "$VSCE_TOKEN" ]; then
-            npm i -g vsce || true
-            # Adjust the publish command if your setup differs. This attempts to use the token provided.
-            npx vsce publish --pat "$VSCE_TOKEN" || echo "VSCE publish failed; check VSCE_TOKEN or vsce usage"
+            npm i -g @vscode/vsce || npm i -g vsce || true
+            set +e
+            out=$(npx @vscode/vsce publish --pat "$VSCE_TOKEN" 2>&1) || rc=$?
+            set -e
+            echo "$out"
+            if [ "${rc:-0}" -ne 0 ]; then
+              if echo "$out" | grep -qi "already exists"; then
+                echo "VSCE: version already exists; skipping publish."
+              else
+                echo "VSCE publish failed; check VSCE_TOKEN and publisher settings."
+                exit 1
+              fi
+            else
+              echo "VSCE publish succeeded."
+            fi
           else
             echo "Skipping VSCE publish: VSCE_TOKEN not set"
           fi
@@ -87,7 +99,28 @@ jobs:
         run: |
           if [ -n "$OPEN_VSX_TOKEN" ]; then
             npm i -g ovsx || true
-            npx ovsx publish --token "$OPEN_VSX_TOKEN" || echo "Open VSX publish failed; check OPEN_VSX_TOKEN or ovsx usage"
+            set +e
+            out=$(npx ovsx publish --token "$OPEN_VSX_TOKEN" 2>&1) || rc=$?
+            if [ "${rc:-0}" -ne 0 ]; then
+              # Try alternate flag --pat
+              out2=$(npx ovsx publish --pat "$OPEN_VSX_TOKEN" 2>&1) || rc2=$?
+              if [ "${rc2:-0}" -ne 0 ]; then
+                # Try plain publish (some ovsx versions read token from env or config)
+                out3=$(npx ovsx publish 2>&1) || rc3=$?
+                echo "$out"
+                echo "$out2"
+                echo "$out3"
+                echo "Open VSX publish failed; check OPEN_VSX_TOKEN and ovsx usage."
+                exit 1
+              else
+                echo "$out2"
+                echo "Open VSX publish succeeded with --pat."
+              fi
+            else
+              echo "$out"
+              echo "Open VSX publish succeeded with --token."
+            fi
+            set -e
           else
             echo "Skipping Open VSX publish: OPEN_VSX_TOKEN not set"
           fi
