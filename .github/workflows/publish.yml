@@ -48,7 +48,7 @@ jobs:
           draft: false
           prerelease: false
       - name: Upload VSIX to Release
-        uses: softprops/action-upload-release-asset@v1
+        uses: actions/upload-release-asset@v1
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./extension.vsix
