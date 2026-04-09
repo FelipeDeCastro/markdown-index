@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 env:
   NODE_VERSION: 18
@@ -57,12 +58,13 @@ jobs:
   publish-marketplaces:
     needs: release
     runs-on: ubuntu-latest
+    environment: publish
     steps:
       - uses: actions/checkout@v4
       - run: npm ci
       - run: npm run compile
       - name: Publish to Visual Studio Marketplace (requires VSCE_TOKEN secret)
-        if: secrets.VSCE_TOKEN != ''
+        if: ${{ secrets.VSCE_TOKEN != '' }}
         env:
           VSCE_TOKEN: ${{ secrets.VSCE_TOKEN }}
         run: |
@@ -71,7 +73,7 @@ jobs:
           npx vsce publish --pat $VSCE_TOKEN || echo "VSCE publish failed; check VSCE_TOKEN or vsce usage"
 
       - name: Publish to Open VSX (requires OPEN_VSX_TOKEN secret)
-        if: secrets.OPEN_VSX_TOKEN != ''
+        if: ${{ secrets.OPEN_VSX_TOKEN != '' }}
         env:
           OPEN_VSX_TOKEN: ${{ secrets.OPEN_VSX_TOKEN }}
         run: |
