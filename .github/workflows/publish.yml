@@ -81,7 +81,19 @@ jobs:
             echo "$out"
             if [ "${rc:-0}" -ne 0 ]; then
               if echo "$out" | grep -qi "already exists"; then
-                echo "VSCE: version already exists; skipping publish."
+                echo "VSCE: version already exists; bumping patch version and retrying publish."
+                # Bump patch version locally (no git tag) and retry publish
+                npm version patch --no-git-tag-version
+                set +e
+                out2=$(npx @vscode/vsce publish --pat "$VSCE_TOKEN" 2>&1) || rc2=$?
+                set -e
+                echo "$out2"
+                if [ "${rc2:-0}" -ne 0 ]; then
+                  echo "VSCE publish failed after bump; check VSCE_TOKEN and publisher settings."
+                  exit 1
+                else
+                  echo "VSCE publish succeeded after version bump."
+                fi
               else
                 echo "VSCE publish failed; check VSCE_TOKEN and publisher settings."
                 exit 1
@@ -98,17 +110,21 @@ jobs:
           OPEN_VSX_TOKEN: ${{ secrets.OPEN_VSX_TOKEN }}
         run: |
           if [ -n "$OPEN_VSX_TOKEN" ]; then
-            npm i -g ovsx || true
+            npm i -g ovsx@latest || true
+            echo "ovsx version: $(ovsx --version 2>&1 || true)"
             set +e
-            out=$(npx ovsx publish --token "$OPEN_VSX_TOKEN" 2>&1) || rc=$?
+            out=$(ovsx publish --token "$OPEN_VSX_TOKEN" 2>&1) || rc=$?
             if [ "${rc:-0}" -ne 0 ]; then
               # Try alternate flag --pat
-              out2=$(npx ovsx publish --pat "$OPEN_VSX_TOKEN" 2>&1) || rc2=$?
+              out2=$(ovsx publish --pat "$OPEN_VSX_TOKEN" 2>&1) || rc2=$?
               if [ "${rc2:-0}" -ne 0 ]; then
                 # Try plain publish (some ovsx versions read token from env or config)
-                out3=$(npx ovsx publish 2>&1) || rc3=$?
+                out3=$(ovsx publish 2>&1) || rc3=$?
+                echo "---- --token output ----"
                 echo "$out"
+                echo "---- --pat output ----"
                 echo "$out2"
+                echo "---- plain publish output ----"
                 echo "$out3"
                 echo "Open VSX publish failed; check OPEN_VSX_TOKEN and ovsx usage."
                 exit 1
