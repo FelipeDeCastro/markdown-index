@@ -64,18 +64,24 @@ jobs:
       - run: npm ci
       - run: npm run compile
       - name: Publish to Visual Studio Marketplace (requires VSCE_TOKEN secret)
-        if: ${{ secrets.VSCE_TOKEN != '' }}
         env:
           VSCE_TOKEN: ${{ secrets.VSCE_TOKEN }}
         run: |
-          npm i -g vsce || true
-          # Adjust the publish command if your setup differs. This attempts to use the token provided.
-          npx vsce publish --pat $VSCE_TOKEN || echo "VSCE publish failed; check VSCE_TOKEN or vsce usage"
+          if [ -n "$VSCE_TOKEN" ]; then
+            npm i -g vsce || true
+            # Adjust the publish command if your setup differs. This attempts to use the token provided.
+            npx vsce publish --pat "$VSCE_TOKEN" || echo "VSCE publish failed; check VSCE_TOKEN or vsce usage"
+          else
+            echo "Skipping VSCE publish: VSCE_TOKEN not set"
+          fi
 
       - name: Publish to Open VSX (requires OPEN_VSX_TOKEN secret)
-        if: ${{ secrets.OPEN_VSX_TOKEN != '' }}
         env:
           OPEN_VSX_TOKEN: ${{ secrets.OPEN_VSX_TOKEN }}
         run: |
-          npm i -g ovsx || true
-          npx ovsx publish --token $OPEN_VSX_TOKEN || echo "Open VSX publish failed; check OPEN_VSX_TOKEN or ovsx usage"
+          if [ -n "$OPEN_VSX_TOKEN" ]; then
+            npm i -g ovsx || true
+            npx ovsx publish --token "$OPEN_VSX_TOKEN" || echo "Open VSX publish failed; check OPEN_VSX_TOKEN or ovsx usage"
+          else
+            echo "Skipping Open VSX publish: OPEN_VSX_TOKEN not set"
+          fi
