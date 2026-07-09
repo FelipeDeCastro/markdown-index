@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.2 — 2026-07-09
+
+- Preview panel content now stretches full width, matching VS Code's built-in Markdown preview, instead of being capped and centered at 900px. (Printed output keeps the 900px width cap for readability.)
+
 ## 0.7.1 — 2026-07-09
 
 - Fix: the extension failed to activate entirely after updating to 0.7.0 (no commands registered, "no data provider registered" in the sidebar). Caused by `.vscodeignore` excluding `node_modules/`, which stripped the `markdown-it` runtime dependency from the packaged VSIX. `markdown-it` is now bundled correctly; `github-markdown-css` (build-time only, vendored as a static CSS file) moved to `devDependencies`.
