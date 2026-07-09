@@ -93,6 +93,7 @@ jobs:
                   exit 1
                 else
                   echo "VSCE publish succeeded after version bump."
+                  echo "PUBLISH_OK=true" >> "$GITHUB_ENV"
                 fi
               else
                 echo "VSCE publish failed; check VSCE_TOKEN and publisher settings."
@@ -100,6 +101,7 @@ jobs:
               fi
             else
               echo "VSCE publish succeeded."
+              echo "PUBLISH_OK=true" >> "$GITHUB_ENV"
             fi
           else
             echo "Skipping VSCE publish: VSCE_TOKEN not set"
@@ -139,4 +141,19 @@ jobs:
             set -e
           else
             echo "Skipping Open VSX publish: OPEN_VSX_TOKEN not set"
+          fi
+
+      - name: Commit version bump back to main (if changed)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if git diff --quiet -- package.json package-lock.json; then
+            echo "No version bump to commit."
+          else
+            version=$(node -p "require('./package.json').version")
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add package.json package-lock.json
+            git commit -m "chore: bump version to $version [skip ci]"
+            git push origin HEAD:main
           fi
