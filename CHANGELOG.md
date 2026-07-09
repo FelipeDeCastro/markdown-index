@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.4 — 2026-07-09
+
+- No functional change. Version sync after CI auto-bumped past 0.7.2 during publishing (see 0.7.2 entry); publish workflow now commits auto-bumped versions back to `main` automatically to prevent this drift going forward.
+
 ## 0.7.2 — 2026-07-09
 
 - Preview panel content now stretches full width, matching VS Code's built-in Markdown preview, instead of being capped and centered at 900px. (Printed output keeps the 900px width cap for readability.)
