@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.0 — 2026-07-09
+
+- Fix: the Markdown Index Explorer section now starts collapsed by default (was always expanded, even with no markdown file open).
+- New custom markdown preview panel (GitHub-styled via `github-markdown-css`) replacing the built-in preview:
+  - Print the current file with the preview layout applied.
+  - Toggle the preview between light and dark theme (icon toggle), independent of or matching the active VS Code color theme; default behavior configurable via `markdownIndex.previewTheme`.
+  - Double-click a line in the preview to jump to the equivalent line in the markdown source editor.
+  - Preview opens in the same editor group/column as the source file instead of always opening beside it.
+
 ## 0.6.4 — 2026-04-02
 
 - Fix: show headings for `SKILL.md`, `.prompt.md`, `.instructions.md`, and `.agent.md` files (VS Code assigns them non-markdown language IDs via the built-in `prompt-basics` extension).

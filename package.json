@@ -2,7 +2,7 @@
   "name": "md-index-explorer",
   "displayName": "Markdown Index",
   "description": "A lightweight Table of Contents for markdown files, displayed in the Explorer panel.",
-  "version": "0.6.4",
+  "version": "0.7.0",
   "publisher": "FelipeDeCastro",
   "license": "MIT",
   "icon": "resources/icon.png",
@@ -42,14 +42,16 @@
           "id": "markdownIndex",
           "name": "Markdown Index",
           "contextualTitle": "Markdown Index",
-          "when": "config.markdownIndex.location == 'explorer'"
+          "when": "config.markdownIndex.location == 'explorer'",
+          "visibility": "collapsed"
         }
       ],
       "markdownIndexSidebar": [
         {
           "id": "markdownIndexSidebarView",
           "name": "Markdown Index",
-          "contextualTitle": "Markdown Index"
+          "contextualTitle": "Markdown Index",
+          "visibility": "collapsed"
         }
       ]
     },
@@ -68,6 +70,12 @@
       {
         "command": "markdownIndex.revealInPreview",
         "title": "Reveal in Preview",
+        "category": "Markdown Index",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "markdownIndex.openCustomPreview",
+        "title": "Open Markdown Preview",
         "category": "Markdown Index",
         "icon": "$(open-preview)"
       },
@@ -125,6 +133,11 @@
           "group": "navigation"
         },
         {
+          "command": "markdownIndex.openCustomPreview",
+          "when": "view == markdownIndex || view == markdownIndexSidebarView",
+          "group": "navigation"
+        },
+        {
           "command": "markdownIndex.refresh",
           "when": "view == markdownIndex || view == markdownIndexSidebarView",
           "group": "navigation"
@@ -177,6 +190,21 @@
           ],
           "default": "sidebar",
           "description": "Where to display the Markdown Index view."
+        },
+        "markdownIndex.previewTheme": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "light",
+            "dark"
+          ],
+          "enumDescriptions": [
+            "Follow the VS Code color theme",
+            "Always use the light theme",
+            "Always use the dark theme"
+          ],
+          "default": "auto",
+          "description": "Color theme used by the Markdown Index preview panel."
         }
       }
     }
@@ -187,8 +215,13 @@
     "watch": "tsc -watch -p ./"
   },
   "devDependencies": {
+    "@types/markdown-it": "^14.1.2",
     "@types/node": "^18.0.0",
     "@types/vscode": "^1.74.0",
     "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "github-markdown-css": "^5.9.0",
+    "markdown-it": "^14.3.0"
   }
 }
