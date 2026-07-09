@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { HeadingNode } from './headingParser';
 import { HeadingTreeProvider } from './headingProvider';
+import { MarkdownPreviewPanel } from './previewPanel';
 
 export function activate(context: vscode.ExtensionContext): void {
   console.log('Markdown Index extension is now active.');
@@ -36,19 +37,9 @@ export function activate(context: vscode.ExtensionContext): void {
     if (!uri) {
       return;
     }
-    // Ensure the document is open and cursor is at the heading line
-    // so the preview scroll-sync can follow.
     const doc = await vscode.workspace.openTextDocument(uri);
-    const editor = await vscode.window.showTextDocument(doc, {
-      preview: false,
-      preserveFocus: false,
-    });
-    const range = doc.lineAt(node.line).range;
-    editor.revealRange(range, vscode.TextEditorRevealType.AtTop);
-    editor.selection = new vscode.Selection(range.start, range.start);
-
-    // Open / focus the markdown preview (syncs to cursor position).
-    await vscode.commands.executeCommand('markdown.showPreview');
+    await MarkdownPreviewPanel.createOrShow(context.extensionUri, doc);
+    MarkdownPreviewPanel.scrollToLineIfActive(doc.uri, node.line);
   }
 
   // --- Commands ---
@@ -75,6 +66,12 @@ export function activate(context: vscode.ExtensionContext): void {
 
   context.subscriptions.push(
     vscode.commands.registerCommand('markdownIndex.revealInPreview', revealInPreview),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('markdownIndex.openCustomPreview', async () => {
+      await openPreviewForActiveOrVisibleMarkdown();
+    }),
   );
 
   context.subscriptions.push(
@@ -131,7 +128,12 @@ export function activate(context: vscode.ExtensionContext): void {
     if (debounceTimer) {
       clearTimeout(debounceTimer);
     }
-    debounceTimer = setTimeout(() => provider.refresh(document), 300);
+    debounceTimer = setTimeout(() => {
+      provider.refresh(document);
+      if (document) {
+        MarkdownPreviewPanel.updateIfActive(document);
+      }
+    }, 300);
   };
 
   context.subscriptions.push(
@@ -180,14 +182,7 @@ export function activate(context: vscode.ExtensionContext): void {
         return;
       }
 
-      // Ensure the document is visible and focused so the markdown preview command targets it.
-      await vscode.window.showTextDocument(targetEditor.document, {
-        preview: false,
-        preserveFocus: false,
-      });
-
-      // Open the Markdown preview in the same column (replaces/focuses the editor).
-      await vscode.commands.executeCommand('markdown.showPreview', targetEditor.document.uri);
+      await MarkdownPreviewPanel.createOrShow(context.extensionUri, targetEditor.document);
     } catch (err) {
       // Fail silently — preview is a convenience feature.
       // eslint-disable-next-line no-console
