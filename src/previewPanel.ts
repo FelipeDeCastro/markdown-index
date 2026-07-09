@@ -310,8 +310,6 @@ body { margin: 0; background-color: var(--bgColor-default); }
   }
   .markdown-body {
     box-sizing: border-box;
-    max-width: 900px;
-    margin: 0 auto;
     padding: 24px 32px 64px;
   }
   @media print {
