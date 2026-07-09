@@ -2,7 +2,7 @@
   "name": "md-index-explorer",
   "displayName": "Markdown Index",
   "description": "A lightweight Table of Contents for markdown files, displayed in the Explorer panel.",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "publisher": "FelipeDeCastro",
   "license": "MIT",
   "icon": "resources/icon.png",
@@ -218,10 +218,10 @@
     "@types/markdown-it": "^14.1.2",
     "@types/node": "^18.0.0",
     "@types/vscode": "^1.74.0",
+    "github-markdown-css": "^5.9.0",
     "typescript": "^5.0.0"
   },
   "dependencies": {
-    "github-markdown-css": "^5.9.0",
     "markdown-it": "^14.3.0"
   }
 }
