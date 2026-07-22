@@ -2,7 +2,7 @@
   "name": "md-index-explorer",
   "displayName": "Markdown Index",
   "description": "A lightweight Table of Contents for markdown files, displayed in the Explorer panel.",
-  "version": "0.7.4",
+  "version": "0.7.5",
   "publisher": "FelipeDeCastro",
   "license": "MIT",
   "icon": "resources/icon.png",
