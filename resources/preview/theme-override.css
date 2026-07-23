@@ -133,3 +133,130 @@
   --focus-outlineColor: var(--borderColor-accent-emphasis);
   --borderColor-neutral-muted: var(--borderColor-muted);
 }
+
+/*
+ * Mermaid diagrams: mermaid.run() replaces the `<pre class="mermaid">`
+ * container's content with an inline SVG, so the default GitHub code-block
+ * chrome (background, border, monospace font, horizontal scrollbar) no
+ * longer applies — strip it so the diagram sits flush like it does on
+ * github.com.
+ */
+.markdown-body pre.mermaid {
+  background: none;
+  border: none;
+  padding: 0;
+  overflow: visible;
+  text-align: center;
+}
+
+/*
+ * GFM task lists (markdown-it-task-lists): render as GitHub does — an
+ * unindented list with a disabled (read-only, matching GitHub's own
+ * rendered-file behavior outside of issues/PRs) checkbox in place of the
+ * literal "[ ]"/"[x]" text.
+ */
+.markdown-body .contains-task-list {
+  padding-left: 0;
+  list-style-type: none;
+}
+.markdown-body .task-list-item {
+  list-style-type: none;
+}
+.markdown-body .task-list-item input[type="checkbox"] {
+  margin: 0 0.35em 0.25em -1.6em;
+  vertical-align: middle;
+}
+
+/*
+ * Heading anchor links (markdown-it-anchor, permalink.ariaHidden()): renders
+ * only a trailing "#" symbol wrapped in the anchor tag (unlike headerLink(),
+ * which wraps the entire heading text — that broke heading visibility since
+ * this file hides .header-anchor until hover). Hidden until the heading is
+ * hovered, matching GitHub's own "#" permalink icon behavior.
+ */
+.markdown-body h1 .header-anchor,
+.markdown-body h2 .header-anchor,
+.markdown-body h3 .header-anchor,
+.markdown-body h4 .header-anchor,
+.markdown-body h5 .header-anchor,
+.markdown-body h6 .header-anchor {
+  margin-left: 4px;
+  opacity: 0;
+  text-decoration: none;
+}
+.markdown-body h1:hover .header-anchor,
+.markdown-body h2:hover .header-anchor,
+.markdown-body h3:hover .header-anchor,
+.markdown-body h4:hover .header-anchor,
+.markdown-body h5:hover .header-anchor,
+.markdown-body h6:hover .header-anchor {
+  opacity: 1;
+}
+
+/*
+ * Footnotes (markdown-it-footnote): tone down the default underline-heavy
+ * appearance to match GitHub's subtler footnote reference/back-link style.
+ */
+.markdown-body .footnote-ref a,
+.markdown-body .footnote-backref {
+  text-decoration: none;
+}
+
+/*
+ * GFM alert callouts (markdown-it-github-alerts renders
+ * `<div class="markdown-alert markdown-alert-{note|tip|important|warning|caution}">`).
+ * Colors match GitHub's own per-type accent (reusing the color variables
+ * already defined above/below for each theme instead of hardcoding new hex
+ * values, so alerts automatically stay correct if those variables are ever
+ * retuned).
+ */
+.markdown-body .markdown-alert {
+  padding: 0.5rem 1rem;
+  margin-bottom: 1rem;
+  border-left: 0.25em solid var(--borderColor-default);
+}
+.markdown-body .markdown-alert > :first-child {
+  margin-top: 0;
+}
+.markdown-body .markdown-alert > :last-child {
+  margin-bottom: 0;
+}
+.markdown-body .markdown-alert .markdown-alert-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 500;
+}
+.markdown-body .markdown-alert-title svg {
+  fill: currentColor;
+}
+.markdown-body .markdown-alert-note {
+  border-left-color: var(--borderColor-accent-emphasis);
+}
+.markdown-body .markdown-alert-note .markdown-alert-title {
+  color: var(--fgColor-accent);
+}
+.markdown-body .markdown-alert-tip {
+  border-left-color: var(--borderColor-success-emphasis);
+}
+.markdown-body .markdown-alert-tip .markdown-alert-title {
+  color: var(--fgColor-success);
+}
+.markdown-body .markdown-alert-important {
+  border-left-color: var(--borderColor-done-emphasis);
+}
+.markdown-body .markdown-alert-important .markdown-alert-title {
+  color: var(--fgColor-done);
+}
+.markdown-body .markdown-alert-warning {
+  border-left-color: var(--borderColor-attention-emphasis);
+}
+.markdown-body .markdown-alert-warning .markdown-alert-title {
+  color: var(--fgColor-attention);
+}
+.markdown-body .markdown-alert-caution {
+  border-left-color: var(--borderColor-danger-emphasis);
+}
+.markdown-body .markdown-alert-caution .markdown-alert-title {
+  color: var(--fgColor-danger);
+}

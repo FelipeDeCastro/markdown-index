@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- The custom preview panel now renders full GitHub Flavored Markdown parity:
+  - Mermaid diagrams (` ```mermaid ` fences), rendered client-side and re-themed on light/dark toggle; also rendered in the "Print" output.
+  - Syntax-highlighted fenced code blocks (via `highlight.js`, GitHub light/dark themes).
+  - GFM task list checkboxes (`- [ ]` / `- [x]`), rendered read-only to match GitHub's file-view behavior.
+  - Heading anchor links (hover-to-reveal `#` permalink, matching GitHub).
+  - Footnotes (`[^1]`).
+  - Emoji shortcodes (`:smile:`).
+  - GFM alert callouts (`> [!NOTE]`, `> [!TIP]`, `> [!IMPORTANT]`, `> [!WARNING]`, `> [!CAUTION]`).
+
 ## 0.7.4 — 2026-07-09
 
 - No functional change. Version sync after CI auto-bumped past 0.7.2 during publishing (see 0.7.2 entry); publish workflow now commits auto-bumped versions back to `main` automatically to prevent this drift going forward.

@@ -3,6 +3,12 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import MarkdownIt = require('markdown-it');
+import hljs from 'highlight.js/lib/common';
+import taskLists = require('markdown-it-task-lists');
+import anchor from 'markdown-it-anchor';
+import footnote = require('markdown-it-footnote');
+import MarkdownItEmoji = require('markdown-it-emoji');
+import githubAlerts from 'markdown-it-github-alerts';
 
 type PreviewTheme = 'auto' | 'light' | 'dark';
 type ResolvedTheme = 'light' | 'dark';
@@ -35,8 +41,32 @@ export class MarkdownPreviewPanel {
   static currentPanel: MarkdownPreviewPanel | undefined;
 
   private static readonly viewType = 'markdownIndexPreview';
-  private static readonly md = new MarkdownIt({ html: true, linkify: true }).use(
-    (md: MarkdownIt) => {
+  private static readonly md = new MarkdownIt({
+    html: true,
+    linkify: true,
+    // Mermaid fences are intercepted by the fence-rule override below before
+    // this callback ever runs for them, so it's safe to always highlight here.
+    highlight(code: string, lang: string): string {
+      const language = hljs.getLanguage(lang) ? lang : undefined;
+      const result = language
+        ? hljs.highlight(code, { language })
+        : hljs.highlightAuto(code);
+      return result.value;
+    },
+  })
+    // No options: markdown-it-task-lists defaults to disabled (read-only)
+    // checkboxes, matching how GitHub renders task lists in a plain file
+    // view (interactive checkboxes are an issue/PR-only feature).
+    .use(taskLists)
+    // ariaHidden() only wraps the small "#" permalink symbol in the anchor
+    // tag (matching GitHub's own behavior); headerLink() wraps the entire
+    // heading text instead, which made headings invisible under our
+    // hover-to-reveal .header-anchor CSS (opacity: 0 by default).
+    .use(anchor, { permalink: anchor.permalink.ariaHidden() })
+    .use(footnote)
+    .use(MarkdownItEmoji.full)
+    .use(githubAlerts)
+    .use((md: MarkdownIt) => {
       md.core.ruler.push('markdown_index_data_line', (state) => {
         for (const token of state.tokens) {
           if (token.map && (token.nesting === 1 || token.nesting === 0)) {
@@ -44,8 +74,25 @@ export class MarkdownPreviewPanel {
           }
         }
       });
-    },
-  );
+
+      // Render ```mermaid fences as a plain container for the mermaid.js
+      // client-side renderer (see getHtmlForWebview/printCurrentDocument)
+      // instead of running them through the syntax-highlighted <pre><code>
+      // default fence renderer.
+      const defaultFenceRenderer =
+        md.renderer.rules.fence ??
+        ((tokens, idx, options, env, self) => self.renderToken(tokens, idx, options));
+      md.renderer.rules.fence = (tokens, idx, options, env, self) => {
+        const token = tokens[idx];
+        const language = token.info.trim().split(/\s+/g)[0];
+        if (language === 'mermaid') {
+          const line = token.map ? String(token.map[0]) : '0';
+          const escaped = md.utils.escapeHtml(token.content);
+          return `<pre class="mermaid" data-line="${line}">${escaped}</pre>`;
+        }
+        return defaultFenceRenderer(tokens, idx, options, env, self);
+      };
+    });
 
   private readonly panel: vscode.WebviewPanel;
   private readonly extensionUri: vscode.Uri;
@@ -185,7 +232,10 @@ export class MarkdownPreviewPanel {
     const css = [
       fs.readFileSync(path.join(previewDir, 'github-markdown.css'), 'utf8'),
       fs.readFileSync(path.join(previewDir, 'theme-override.css'), 'utf8'),
+      fs.readFileSync(path.join(previewDir, 'hljs-theme.css'), 'utf8'),
     ].join('\n');
+    const mermaidJs = fs.readFileSync(path.join(previewDir, 'mermaid.min.js'), 'utf8');
+    const mermaidTheme = resolvedTheme === 'dark' ? 'dark' : 'default';
 
     const html = `<!DOCTYPE html>
 <html lang="en">
@@ -200,7 +250,14 @@ body { margin: 0; background-color: var(--bgColor-default); }
 </head>
 <body>
 <article class="markdown-body" data-theme="${resolvedTheme}">${bodyHtml}</article>
-<script>window.onload = function () { window.print(); };</script>
+<script>${mermaidJs}</script>
+<script>
+  (async function () {
+    mermaid.initialize({ startOnLoad: false, theme: '${mermaidTheme}' });
+    await mermaid.run({ querySelector: 'article.markdown-body pre.mermaid' });
+    window.print();
+  }());
+</script>
 </body>
 </html>`;
 
@@ -261,6 +318,8 @@ body { margin: 0; background-color: var(--bgColor-default); }
       .get<PreviewTheme>('previewTheme', 'auto');
     const resolvedTheme = resolveTheme(theme);
     const themeOverrideCssUri = this.resourceUri(webview, 'theme-override.css');
+    const hljsThemeCssUri = this.resourceUri(webview, 'hljs-theme.css');
+    const mermaidJsUri = this.resourceUri(webview, 'mermaid.min.js');
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -269,6 +328,8 @@ body { margin: 0; background-color: var(--bgColor-default); }
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} https: data:; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
 <link rel="stylesheet" href="${cssUri}">
 <link rel="stylesheet" href="${themeOverrideCssUri}">
+<link rel="stylesheet" href="${hljsThemeCssUri}">
+<script nonce="${nonce}" src="${mermaidJsUri}"></script>
 <style>
   html, body { height: 100%; }
   body {
@@ -345,17 +406,35 @@ body { margin: 0; background-color: var(--bgColor-default); }
       const content = document.getElementById('mi-content');
       const sunIcon = document.getElementById('mi-icon-sun');
       const moonIcon = document.getElementById('mi-icon-moon');
+      // Preserved so mermaid diagrams (which mermaid.run() destructively
+      // replaces with rendered SVG) can be re-parsed from source whenever the
+      // theme changes, without a round-trip to the extension host.
+      let currentRawHtml = content.innerHTML;
+
+      function mermaidThemeFor(theme) {
+        return theme === 'dark' ? 'dark' : 'default';
+      }
+
+      async function renderMermaid(theme) {
+        mermaid.initialize({ startOnLoad: false, theme: mermaidThemeFor(theme) });
+        await mermaid.run({ querySelector: '#mi-content pre.mermaid' });
+      }
 
       function updateThemeIcon(theme) {
         sunIcon.style.display = theme === 'dark' ? 'none' : 'block';
         moonIcon.style.display = theme === 'dark' ? 'block' : 'none';
       }
       updateThemeIcon(content.getAttribute('data-theme'));
+      renderMermaid(content.getAttribute('data-theme'));
 
       document.getElementById('mi-theme-toggle').addEventListener('click', () => {
         const next = content.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        // Reset to the un-rendered markup before re-running mermaid, otherwise
+        // it has no diagram source left to re-parse (it already became SVG).
+        content.innerHTML = currentRawHtml;
         content.setAttribute('data-theme', next);
         updateThemeIcon(next);
+        renderMermaid(next);
         vscode.postMessage({ type: 'setTheme', theme: next });
       });
 
@@ -376,7 +455,9 @@ body { margin: 0; background-color: var(--bgColor-default); }
       window.addEventListener('message', (event) => {
         const message = event.data;
         if (message.type === 'update') {
+          currentRawHtml = message.html;
           content.innerHTML = message.html;
+          renderMermaid(content.getAttribute('data-theme'));
         } else if (message.type === 'scrollToLine') {
           const nodes = content.querySelectorAll('[data-line]');
           let best = null;
@@ -392,7 +473,9 @@ body { margin: 0; background-color: var(--bgColor-default); }
             best.scrollIntoView({ block: 'start' });
           }
         } else if (message.type === 'setResolvedTheme') {
+          content.innerHTML = currentRawHtml;
           content.setAttribute('data-theme', message.theme);
+          renderMermaid(message.theme);
           updateThemeIcon(message.theme);
         }
       });
