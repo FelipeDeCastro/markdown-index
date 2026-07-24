@@ -122,18 +122,34 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // --- Editor tracking ---
 
-  let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+  let treeDebounceTimer: ReturnType<typeof setTimeout> | undefined;
 
-  const scheduleRefresh = (document: vscode.TextDocument | undefined) => {
-    if (debounceTimer) {
-      clearTimeout(debounceTimer);
+  const scheduleTreeRefresh = (document: vscode.TextDocument | undefined) => {
+    if (treeDebounceTimer) {
+      clearTimeout(treeDebounceTimer);
     }
-    debounceTimer = setTimeout(() => {
+    treeDebounceTimer = setTimeout(() => {
       provider.refresh(document);
-      if (document) {
-        MarkdownPreviewPanel.updateIfActive(document);
-      }
     }, 300);
+  };
+
+  // Keyed per-document so editing one file's preview panel never cancels a
+  // pending refresh for another file's panel (each panel updates independently).
+  const previewDebounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+  const schedulePreviewRefresh = (document: vscode.TextDocument) => {
+    const key = document.uri.toString();
+    const existingTimer = previewDebounceTimers.get(key);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+    previewDebounceTimers.set(
+      key,
+      setTimeout(() => {
+        previewDebounceTimers.delete(key);
+        MarkdownPreviewPanel.updateIfOpen(document);
+      }, 300),
+    );
   };
 
   context.subscriptions.push(
@@ -149,10 +165,16 @@ export function activate(context: vscode.ExtensionContext): void {
 
   context.subscriptions.push(
     vscode.workspace.onDidChangeTextDocument((event) => {
+      // The sidebar/index tree only ever shows one document, so keep its
+      // refresh scoped to the active editor.
       const activeDoc = vscode.window.activeTextEditor?.document;
       if (activeDoc && event.document === activeDoc) {
-        scheduleRefresh(activeDoc);
+        scheduleTreeRefresh(activeDoc);
       }
+      // Live preview updates apply to whichever document was edited, regardless
+      // of which editor is currently active — each open preview panel is
+      // independent and should always reflect its own file's latest content.
+      schedulePreviewRefresh(event.document);
     }),
   );
 

@@ -38,7 +38,8 @@ function resolveTheme(pref: PreviewTheme): ResolvedTheme {
  * a light/dark theme toggle, and double-click-to-source navigation.
  */
 export class MarkdownPreviewPanel {
-  static currentPanel: MarkdownPreviewPanel | undefined;
+  /** One panel per document, keyed by `uri.toString()`, so each file gets its own preview window. */
+  private static readonly panels = new Map<string, MarkdownPreviewPanel>();
 
   private static readonly viewType = 'markdownIndexPreview';
   private static readonly md = new MarkdownIt({
@@ -103,17 +104,19 @@ export class MarkdownPreviewPanel {
     extensionUri: vscode.Uri,
     document: vscode.TextDocument,
   ): Promise<void> {
-    if (MarkdownPreviewPanel.currentPanel) {
-      // Reveal in place — do not move the panel to a different column.
-      MarkdownPreviewPanel.currentPanel.panel.reveal(undefined, true);
-      await MarkdownPreviewPanel.currentPanel.setDocument(document);
+    const key = document.uri.toString();
+    const existing = MarkdownPreviewPanel.panels.get(key);
+    if (existing) {
+      // Focus the existing panel for this file in place — do not move it to a
+      // different column, and do not repurpose it for a different document.
+      existing.panel.reveal(undefined, false);
       return;
     }
 
     // Open in the same column as the document's editor (if visible), so the
     // preview replaces/tabs alongside the editor instead of splitting the layout.
     const visibleEditor = vscode.window.visibleTextEditors.find(
-      (e) => e.document.uri.toString() === document.uri.toString(),
+      (e) => e.document.uri.toString() === key,
     );
     const column = visibleEditor?.viewColumn ?? vscode.ViewColumn.Active;
 
@@ -124,25 +127,35 @@ export class MarkdownPreviewPanel {
       {
         enableScripts: true,
         localResourceRoots: [vscode.Uri.joinPath(extensionUri, 'resources', 'preview')],
+        // Without this, VS Code tears down the webview's iframe/JS context
+        // whenever it's not the visible tab (not just unfocused) to save
+        // memory. That means postMessage-based live updates (see render())
+        // sent while a background panel is hidden are silently dropped, so
+        // an edited-but-not-visible preview never reflects the latest
+        // content until the panel becomes visible again and gets a fresh
+        // full HTML render. Keeping the context alive fixes that at the
+        // cost of extra memory per open preview panel.
+        retainContextWhenHidden: true,
       },
     );
 
-    MarkdownPreviewPanel.currentPanel = new MarkdownPreviewPanel(panel, extensionUri);
-    await MarkdownPreviewPanel.currentPanel.setDocument(document);
+    const instance = new MarkdownPreviewPanel(panel, extensionUri);
+    MarkdownPreviewPanel.panels.set(key, instance);
+    await instance.setDocument(document);
   }
 
-  /** Re-renders the preview if it currently shows the given document. */
-  static updateIfActive(document: vscode.TextDocument): void {
-    const current = MarkdownPreviewPanel.currentPanel;
-    if (current && current.documentUri?.toString() === document.uri.toString()) {
+  /** Re-renders the preview for the given document, if a panel for it is open. */
+  static updateIfOpen(document: vscode.TextDocument): void {
+    const current = MarkdownPreviewPanel.panels.get(document.uri.toString());
+    if (current) {
       current.render(document);
     }
   }
 
-  /** Scrolls the preview to the given line, if it currently shows that document. */
+  /** Scrolls the preview to the given line, if a panel for that document is open. */
   static scrollToLineIfActive(uri: vscode.Uri, line: number): void {
-    const current = MarkdownPreviewPanel.currentPanel;
-    if (current && current.documentUri?.toString() === uri.toString()) {
+    const current = MarkdownPreviewPanel.panels.get(uri.toString());
+    if (current) {
       current.scrollToLine(line);
     }
   }
@@ -486,7 +499,12 @@ body { margin: 0; background-color: var(--bgColor-default); }
   }
 
   private dispose(): void {
-    MarkdownPreviewPanel.currentPanel = undefined;
+    if (this.documentUri) {
+      const key = this.documentUri.toString();
+      if (MarkdownPreviewPanel.panels.get(key) === this) {
+        MarkdownPreviewPanel.panels.delete(key);
+      }
+    }
     this.panel.dispose();
     while (this.disposables.length) {
       const d = this.disposables.pop();
