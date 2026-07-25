@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- The custom preview panel now supports navigating internal relative links (e.g. `./WORKFLOW.md`), header anchor links (`#heading`), and external URLs (`https://...`).
+
 - The custom preview panel now supports one independent window per file: opening a preview for a file that already has one open focuses/reveals that panel instead of repurposing it for the new file, while a file without a panel gets a new one.
 - Preview content now stays live and up to date as you type, even while a different file's preview panel (or no preview at all) is focused — no more closing and reopening to see edits. (Fixes a VS Code webview quirk where background panels stop receiving content updates unless `retainContextWhenHidden` is set.)
 - The custom preview panel now renders full GitHub Flavored Markdown parity:

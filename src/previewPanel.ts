@@ -204,7 +204,7 @@ export class MarkdownPreviewPanel {
     void this.panel.webview.postMessage({ type: 'scrollToLine', line });
   }
 
-  private async handleMessage(message: { type: string; line?: number; theme?: PreviewTheme }): Promise<void> {
+  private async handleMessage(message: { type: string; line?: number; theme?: PreviewTheme; href?: string }): Promise<void> {
     switch (message.type) {
       case 'reveal':
         if (typeof message.line === 'number') {
@@ -221,6 +221,49 @@ export class MarkdownPreviewPanel {
       case 'print':
         await this.printCurrentDocument();
         break;
+      case 'openExternal':
+        if (message.href) {
+          await vscode.env.openExternal(vscode.Uri.parse(message.href));
+        }
+        break;
+      case 'openLink':
+        if (message.href) {
+          await this.openLink(message.href);
+        }
+        break;
+    }
+  }
+
+  private async openLink(href: string): Promise<void> {
+    if (!this.documentUri) {
+      return;
+    }
+
+    const [pathPart] = href.split('#');
+
+    let targetUri: vscode.Uri;
+    if (pathPart) {
+      const decodedPath = decodeURIComponent(pathPart);
+      const baseDir = vscode.Uri.joinPath(this.documentUri, '..');
+      targetUri = vscode.Uri.joinPath(baseDir, decodedPath);
+    } else {
+      targetUri = this.documentUri;
+    }
+
+    try {
+      await vscode.workspace.fs.stat(targetUri);
+    } catch {
+      void vscode.window.showWarningMessage(`File not found: ${path.basename(targetUri.fsPath)}`);
+      return;
+    }
+
+    const isMarkdown = /\.(md|markdown|mdown|mkd)$/i.test(targetUri.fsPath);
+
+    if (isMarkdown) {
+      const doc = await vscode.workspace.openTextDocument(targetUri);
+      await MarkdownPreviewPanel.createOrShow(this.extensionUri, doc);
+    } else {
+      await vscode.commands.executeCommand('vscode.open', targetUri);
     }
   }
 
@@ -453,6 +496,40 @@ body { margin: 0; background-color: var(--bgColor-default); }
 
       document.getElementById('mi-print').addEventListener('click', () => {
         vscode.postMessage({ type: 'print' });
+      });
+
+      content.addEventListener('click', (event) => {
+        const anchor = event.target.closest('a');
+        if (!anchor) {
+          return;
+        }
+
+        const href = anchor.getAttribute('href');
+        if (!href) {
+          return;
+        }
+
+        if (href.startsWith('#')) {
+          event.preventDefault();
+          const targetId = href.substring(1);
+          const decodedId = decodeURIComponent(targetId);
+          const targetEl = document.getElementById(decodedId) ||
+                           document.getElementById(targetId) ||
+                           document.querySelector('[id="' + CSS.escape(decodedId) + '"]');
+          if (targetEl) {
+            targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+          return;
+        }
+
+        if (/^(https?|mailto|vscode|command):/i.test(href)) {
+          event.preventDefault();
+          vscode.postMessage({ type: 'openExternal', href });
+          return;
+        }
+
+        event.preventDefault();
+        vscode.postMessage({ type: 'openLink', href });
       });
 
       content.addEventListener('dblclick', (event) => {
