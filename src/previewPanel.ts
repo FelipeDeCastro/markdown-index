@@ -276,9 +276,9 @@ export class MarkdownPreviewPanel {
    * standalone HTML file (with the same CSS inlined) and open it in the
    * user's default browser, which supports printing natively.
    */
-  private async printCurrentDocument(): Promise<void> {
+  private async createExternalHtml(autoPrint: boolean = false): Promise<string> {
     if (!this.documentUri) {
-      return;
+      return '';
     }
     const doc = await vscode.workspace.openTextDocument(this.documentUri);
     const bodyHtml = MarkdownPreviewPanel.md.render(doc.getText());
@@ -296,32 +296,161 @@ export class MarkdownPreviewPanel {
     const mermaidJs = fs.readFileSync(path.join(previewDir, 'mermaid.min.js'), 'utf8');
     const mermaidTheme = resolvedTheme === 'dark' ? 'dark' : 'default';
 
-    const html = `<!DOCTYPE html>
-<html lang="en">
+    return `<!DOCTYPE html>
+<html lang="en" data-theme="${resolvedTheme}">
 <head>
 <meta charset="UTF-8">
 <title>${path.basename(doc.fileName)}</title>
 <style>
 ${css}
-body { margin: 0; background-color: var(--bgColor-default); }
-.markdown-body { box-sizing: border-box; max-width: 900px; margin: 0 auto; padding: 24px 32px 64px; }
+html, body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  background-color: var(--bgColor-default, #ffffff);
+  color: var(--fgColor-default, #1f2328);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+body {
+  display: flex;
+  flex-direction: row;
+}
+.ext-sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 10px;
+  background-color: var(--bgColor-muted, #f6f8fa);
+  border-right: 1px solid var(--borderColor-default, #d1d9e0);
+  z-index: 1000;
+}
+.ext-sidebar button {
+  background: transparent;
+  border: 1px solid var(--borderColor-default, rgba(128,128,128,0.3));
+  color: var(--fgColor-default, #24292f);
+  border-radius: 6px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+.ext-sidebar button:hover {
+  background-color: var(--bgColor-neutral-muted, rgba(128,128,128,0.15));
+}
+.ext-sidebar button svg {
+  display: block;
+  flex-shrink: 0;
+}
+.ext-container {
+  flex: 1;
+  min-width: 0;
+}
+.markdown-body {
+  box-sizing: border-box;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 32px 40px 64px;
+}
+@media print {
+  body { display: block; }
+  .ext-sidebar { display: none !important; }
+  .markdown-body { max-width: none; padding: 0; }
+}
 </style>
 </head>
 <body>
-<article class="markdown-body" data-theme="${resolvedTheme}">${bodyHtml}</article>
+  <aside class="ext-sidebar">
+    <button id="ext-theme-toggle" class="ext-icon-btn" title="Toggle light/dark theme">
+      <svg id="ext-icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="4"></circle>
+        <line x1="12" y1="2" x2="12" y2="4"></line>
+        <line x1="12" y1="20" x2="12" y2="22"></line>
+        <line x1="4.93" y1="4.93" x2="6.34" y2="6.34"></line>
+        <line x1="17.66" y1="17.66" x2="19.07" y2="19.07"></line>
+        <line x1="2" y1="12" x2="4" y2="12"></line>
+        <line x1="20" y1="12" x2="22" y2="12"></line>
+        <line x1="4.93" y1="19.07" x2="6.34" y2="17.66"></line>
+        <line x1="17.66" y1="6.34" x2="19.07" y2="4.93"></line>
+      </svg>
+      <svg id="ext-icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+      </svg>
+    </button>
+    <button id="ext-print" class="ext-icon-btn" title="Print / Save PDF">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="6 9 6 2 18 2 18 9"></polyline>
+        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+        <rect x="6" y="14" width="12" height="8"></rect>
+      </svg>
+    </button>
+  </aside>
+  <main class="ext-container">
+    <article class="markdown-body" id="ext-content" data-theme="${resolvedTheme}">${bodyHtml}</article>
+  </main>
 <script>${mermaidJs}</script>
 <script>
   (async function () {
-    mermaid.initialize({ startOnLoad: false, theme: '${mermaidTheme}' });
-    await mermaid.run({ querySelector: 'article.markdown-body pre.mermaid' });
-    setTimeout(() => {
+    const htmlEl = document.documentElement;
+    const content = document.getElementById('ext-content');
+    const sunIcon = document.getElementById('ext-icon-sun');
+    const moonIcon = document.getElementById('ext-icon-moon');
+    const rawHtml = content.innerHTML;
+
+    function mermaidThemeFor(theme) {
+      return theme === 'dark' ? 'dark' : 'default';
+    }
+
+    async function renderMermaid(theme) {
+      mermaid.initialize({ startOnLoad: false, theme: mermaidThemeFor(theme) });
+      await mermaid.run({ querySelector: '#ext-content pre.mermaid' });
+    }
+
+    function updateTheme(theme) {
+      htmlEl.setAttribute('data-theme', theme);
+      content.setAttribute('data-theme', theme);
+      sunIcon.style.display = theme === 'dark' ? 'none' : 'block';
+      moonIcon.style.display = theme === 'dark' ? 'block' : 'none';
+    }
+
+    updateTheme(content.getAttribute('data-theme'));
+    await renderMermaid(content.getAttribute('data-theme'));
+
+    document.getElementById('ext-theme-toggle').addEventListener('click', async () => {
+      const next = content.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      content.innerHTML = rawHtml;
+      updateTheme(next);
+      await renderMermaid(next);
+    });
+
+    document.getElementById('ext-print').addEventListener('click', () => {
       window.print();
-    }, 250);
+    });
+
+    if (${autoPrint}) {
+      setTimeout(() => {
+        window.print();
+      }, 250);
+    }
   }());
 </script>
 </body>
 </html>`;
+  }
 
+  private async printCurrentDocument(): Promise<void> {
+    if (!this.documentUri) {
+      return;
+    }
+    const html = await this.createExternalHtml(true);
     const tmpFile = path.join(os.tmpdir(), `markdown-index-print-${Date.now()}.html`);
     fs.writeFileSync(tmpFile, html, 'utf8');
     await vscode.env.openExternal(vscode.Uri.file(tmpFile));
@@ -331,45 +460,7 @@ body { margin: 0; background-color: var(--bgColor-default); }
     if (!this.documentUri) {
       return;
     }
-    const doc = await vscode.workspace.openTextDocument(this.documentUri);
-    const bodyHtml = MarkdownPreviewPanel.md.render(doc.getText());
-    const theme = vscode.workspace
-      .getConfiguration('markdownIndex')
-      .get<PreviewTheme>('previewTheme', 'auto');
-    const resolvedTheme = resolveTheme(theme);
-
-    const previewDir = vscode.Uri.joinPath(this.extensionUri, 'resources', 'preview').fsPath;
-    const css = [
-      fs.readFileSync(path.join(previewDir, 'github-markdown.css'), 'utf8'),
-      fs.readFileSync(path.join(previewDir, 'theme-override.css'), 'utf8'),
-      fs.readFileSync(path.join(previewDir, 'hljs-theme.css'), 'utf8'),
-    ].join('\n');
-    const mermaidJs = fs.readFileSync(path.join(previewDir, 'mermaid.min.js'), 'utf8');
-    const mermaidTheme = resolvedTheme === 'dark' ? 'dark' : 'default';
-
-    const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>${path.basename(doc.fileName)}</title>
-<style>
-${css}
-body { margin: 0; background-color: var(--bgColor-default); }
-.markdown-body { box-sizing: border-box; max-width: 900px; margin: 0 auto; padding: 24px 32px 64px; }
-</style>
-</head>
-<body>
-<article class="markdown-body" data-theme="${resolvedTheme}">${bodyHtml}</article>
-<script>${mermaidJs}</script>
-<script>
-  (async function () {
-    mermaid.initialize({ startOnLoad: false, theme: '${mermaidTheme}' });
-    await mermaid.run({ querySelector: 'article.markdown-body pre.mermaid' });
-  }());
-</script>
-</body>
-</html>`;
-
+    const html = await this.createExternalHtml(false);
     const tmpFile = path.join(os.tmpdir(), `markdown-index-preview-${Date.now()}.html`);
     fs.writeFileSync(tmpFile, html, 'utf8');
     await vscode.env.openExternal(vscode.Uri.file(tmpFile));
@@ -451,7 +542,7 @@ body { margin: 0; background-color: var(--bgColor-default); }
     top: 0;
     display: flex;
     justify-content: flex-end;
-    gap: 4px;
+    gap: 6px;
     padding: 6px 12px;
     background-color: var(--vscode-editor-background);
     border-bottom: 1px solid var(--vscode-widget-border, transparent);
@@ -462,21 +553,20 @@ body { margin: 0; background-color: var(--bgColor-default); }
     border: 1px solid var(--vscode-button-border, transparent);
     color: var(--vscode-foreground);
     border-radius: 4px;
-    padding: 4px 8px;
+    padding: 4px;
     cursor: pointer;
-    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
   }
   .mi-toolbar button:hover {
     background-color: var(--vscode-toolbar-hoverBackground, rgba(128,128,128,0.2));
   }
-  .mi-toolbar button.mi-icon-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 4px;
-  }
-  .mi-icon-btn svg {
+  .mi-toolbar svg {
     display: block;
+    flex-shrink: 0;
   }
   .markdown-body {
     box-sizing: border-box;
@@ -506,8 +596,20 @@ body { margin: 0; background-color: var(--bgColor-default); }
         <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
       </svg>
     </button>
-    <button id="mi-open-browser" title="View on External Browser">View on External Browser</button>
-    <button id="mi-print" title="Print">Print</button>
+    <button id="mi-open-browser" title="View on External Browser">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+        <polyline points="15 3 21 3 21 9"></polyline>
+        <line x1="10" y1="14" x2="21" y2="3"></line>
+      </svg>
+    </button>
+    <button id="mi-print" title="Print / Save PDF">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="6 9 6 2 18 2 18 9"></polyline>
+        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+        <rect x="6" y="14" width="12" height="8"></rect>
+      </svg>
+    </button>
   </div>
   <article class="markdown-body" id="mi-content" data-theme="${resolvedTheme}">${bodyHtml}</article>
   <script nonce="${nonce}">
