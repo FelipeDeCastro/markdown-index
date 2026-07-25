@@ -221,6 +221,9 @@ export class MarkdownPreviewPanel {
       case 'print':
         await this.printCurrentDocument();
         break;
+      case 'openInBrowser':
+        await this.openInBrowser();
+        break;
       case 'openExternal':
         if (message.href) {
           await vscode.env.openExternal(vscode.Uri.parse(message.href));
@@ -311,13 +314,63 @@ body { margin: 0; background-color: var(--bgColor-default); }
   (async function () {
     mermaid.initialize({ startOnLoad: false, theme: '${mermaidTheme}' });
     await mermaid.run({ querySelector: 'article.markdown-body pre.mermaid' });
-    window.print();
+    setTimeout(() => {
+      window.print();
+    }, 250);
   }());
 </script>
 </body>
 </html>`;
 
     const tmpFile = path.join(os.tmpdir(), `markdown-index-print-${Date.now()}.html`);
+    fs.writeFileSync(tmpFile, html, 'utf8');
+    await vscode.env.openExternal(vscode.Uri.file(tmpFile));
+  }
+
+  private async openInBrowser(): Promise<void> {
+    if (!this.documentUri) {
+      return;
+    }
+    const doc = await vscode.workspace.openTextDocument(this.documentUri);
+    const bodyHtml = MarkdownPreviewPanel.md.render(doc.getText());
+    const theme = vscode.workspace
+      .getConfiguration('markdownIndex')
+      .get<PreviewTheme>('previewTheme', 'auto');
+    const resolvedTheme = resolveTheme(theme);
+
+    const previewDir = vscode.Uri.joinPath(this.extensionUri, 'resources', 'preview').fsPath;
+    const css = [
+      fs.readFileSync(path.join(previewDir, 'github-markdown.css'), 'utf8'),
+      fs.readFileSync(path.join(previewDir, 'theme-override.css'), 'utf8'),
+      fs.readFileSync(path.join(previewDir, 'hljs-theme.css'), 'utf8'),
+    ].join('\n');
+    const mermaidJs = fs.readFileSync(path.join(previewDir, 'mermaid.min.js'), 'utf8');
+    const mermaidTheme = resolvedTheme === 'dark' ? 'dark' : 'default';
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>${path.basename(doc.fileName)}</title>
+<style>
+${css}
+body { margin: 0; background-color: var(--bgColor-default); }
+.markdown-body { box-sizing: border-box; max-width: 900px; margin: 0 auto; padding: 24px 32px 64px; }
+</style>
+</head>
+<body>
+<article class="markdown-body" data-theme="${resolvedTheme}">${bodyHtml}</article>
+<script>${mermaidJs}</script>
+<script>
+  (async function () {
+    mermaid.initialize({ startOnLoad: false, theme: '${mermaidTheme}' });
+    await mermaid.run({ querySelector: 'article.markdown-body pre.mermaid' });
+  }());
+</script>
+</body>
+</html>`;
+
+    const tmpFile = path.join(os.tmpdir(), `markdown-index-preview-${Date.now()}.html`);
     fs.writeFileSync(tmpFile, html, 'utf8');
     await vscode.env.openExternal(vscode.Uri.file(tmpFile));
   }
@@ -453,6 +506,7 @@ body { margin: 0; background-color: var(--bgColor-default); }
         <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
       </svg>
     </button>
+    <button id="mi-open-browser" title="View on External Browser">View on External Browser</button>
     <button id="mi-print" title="Print">Print</button>
   </div>
   <article class="markdown-body" id="mi-content" data-theme="${resolvedTheme}">${bodyHtml}</article>
@@ -492,6 +546,10 @@ body { margin: 0; background-color: var(--bgColor-default); }
         updateThemeIcon(next);
         renderMermaid(next);
         vscode.postMessage({ type: 'setTheme', theme: next });
+      });
+
+      document.getElementById('mi-open-browser').addEventListener('click', () => {
+        vscode.postMessage({ type: 'openInBrowser' });
       });
 
       document.getElementById('mi-print').addEventListener('click', () => {
