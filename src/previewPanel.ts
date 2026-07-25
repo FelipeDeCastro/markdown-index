@@ -10,6 +10,7 @@ import anchor from 'markdown-it-anchor';
 import footnote = require('markdown-it-footnote');
 import MarkdownItEmoji = require('markdown-it-emoji');
 import githubAlerts from 'markdown-it-github-alerts';
+import { parseHeadings, buildTree, HeadingNode } from './headingParser';
 
 type PreviewTheme = 'auto' | 'light' | 'dark';
 type ResolvedTheme = 'light' | 'dark';
@@ -294,7 +295,8 @@ export class MarkdownPreviewPanel {
     }
     visited.add(canonicalKey);
     const doc = await vscode.workspace.openTextDocument(docUri);
-    const bodyHtml = MarkdownPreviewPanel.md.render(doc.getText());
+    const rawText = doc.getText();
+    const bodyHtml = MarkdownPreviewPanel.md.render(rawText);
     const theme = vscode.workspace
       .getConfiguration('markdownIndex')
       .get<PreviewTheme>('previewTheme', 'auto');
@@ -308,11 +310,27 @@ export class MarkdownPreviewPanel {
     ].join('\n');
     const mermaidJs = fs.readFileSync(path.join(previewDir, 'mermaid.min.js'), 'utf8');
 
+    // Build TOC from parsed headings
+    const headings = parseHeadings(rawText);
+    const tocRoots = buildTree(headings);
+
+    function renderTocItem(node: HeadingNode, minLevel: number): string {
+      const indent = (node.level - minLevel) * 12;
+      const childrenHtml = node.children.length > 0
+        ? `<ul class="ext-toc-children">${node.children.map(c => renderTocItem(c, minLevel)).join('')}</ul>`
+        : '';
+      return `<li class="ext-toc-item" style="padding-left:${indent}px"><a class="ext-toc-link" data-line="${node.line}" data-text="${encodeURIComponent(node.text)}" href="#">${node.text}</a>${childrenHtml}</li>`;
+    }
+
+    const minLevel = headings.length > 0 ? Math.min(...headings.map(h => h.level)) : 1;
+    const tocHtml = tocRoots.length > 0
+      ? `<ul class="ext-toc-list">${tocRoots.map(n => renderTocItem(n, minLevel)).join('')}</ul>`
+      : '<p class="ext-toc-empty">No headings found</p>';
+
     // Pre-generate external HTML previews for linked relative markdown documents (bounded by maxDepth)
     const linkMap: Record<string, string> = {};
 
     if (depth < maxDepth) {
-      const rawText = doc.getText();
       const rawMdLinkRegex = /\[[^\]]*\]\(([^)]+)\)/g;
       const htmlLinkRegex = /href=["']([^"']+)["']/gi;
       const hrefsToProcess = new Set<string>();
@@ -362,7 +380,8 @@ ${css}
 html, body {
   margin: 0;
   padding: 0;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
   background-color: var(--bgColor-default, #ffffff);
   color: var(--fgColor-default, #1f2328);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -371,44 +390,160 @@ body {
   display: flex;
   flex-direction: row;
 }
-.ext-sidebar {
-  position: sticky;
-  top: 0;
+/* ── TOC panel ──────────────────────────────────────────── */
+.ext-toc-panel {
+  position: relative;
   height: 100vh;
+  width: 240px;
+  min-width: 240px;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  padding: 16px 10px;
   background-color: var(--bgColor-muted, #f6f8fa);
   border-right: 1px solid var(--borderColor-default, #d1d9e0);
   z-index: 1000;
+  transition: width 0.2s ease, min-width 0.2s ease;
+  overflow: hidden;
+  flex-shrink: 0;
 }
-.ext-sidebar button {
+.ext-toc-panel.collapsed {
+  width: 48px !important;
+  min-width: 48px !important;
+}
+.ext-toc-panel.collapsed #ext-toc-resize-handle {
+  pointer-events: none;
+}
+.ext-toc-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 8px 8px 10px;
+  border-bottom: 1px solid var(--borderColor-default, #d1d9e0);
+  flex-shrink: 0;
+}
+.ext-toc-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.6;
+  white-space: nowrap;
+  overflow: hidden;
+  flex: 1;
+  transition: opacity 0.15s ease;
+}
+.ext-toc-panel.collapsed .ext-toc-title {
+  opacity: 0;
+  pointer-events: none;
+}
+.ext-toc-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.ext-toc-panel.collapsed .ext-toc-actions {
+  display: none;
+}
+.ext-icon-btn {
   background: transparent;
   border: 1px solid var(--borderColor-default, rgba(128,128,128,0.3));
   color: var(--fgColor-default, #24292f);
   border-radius: 6px;
-  width: 36px;
-  height: 36px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: background-color 0.15s ease, border-color 0.15s ease;
+  flex-shrink: 0;
 }
-.ext-sidebar button:hover {
+.ext-icon-btn:hover {
   background-color: var(--bgColor-neutral-muted, rgba(128,128,128,0.15));
 }
-.ext-sidebar button svg {
+.ext-icon-btn svg {
   display: block;
   flex-shrink: 0;
 }
+.ext-toc-toggle {
+  background: transparent;
+  border: none;
+  color: var(--fgColor-default, #24292f);
+  border-radius: 4px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  opacity: 0.7;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+.ext-toc-toggle:hover {
+  opacity: 1;
+  background-color: var(--bgColor-neutral-muted, rgba(128,128,128,0.15));
+}
+.ext-toc-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px 0;
+  scrollbar-width: thin;
+}
+.ext-toc-panel.collapsed .ext-toc-body {
+  visibility: hidden;
+}
+.ext-toc-list,
+.ext-toc-children {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.ext-toc-item {
+  margin: 0;
+}
+.ext-toc-link {
+  display: block;
+  padding: 3px 12px 3px 12px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--fgColor-default, #24292f);
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-left: 2px solid transparent;
+  transition: background-color 0.1s ease, border-color 0.1s ease, color 0.1s ease;
+  opacity: 0.85;
+}
+.ext-toc-link:hover {
+  background-color: var(--bgColor-neutral-muted, rgba(128,128,128,0.1));
+  color: var(--fgColor-default, #24292f);
+  opacity: 1;
+}
+.ext-toc-link.active {
+  border-left-color: var(--fgColor-accent, #0969da);
+  color: var(--fgColor-accent, #0969da);
+  background-color: var(--bgColor-accent-muted, rgba(9,105,218,0.08));
+  font-weight: 500;
+  opacity: 1;
+}
+.ext-toc-empty {
+  padding: 12px;
+  font-size: 12px;
+  opacity: 0.5;
+  font-style: italic;
+}
+/* ── Main content ───────────────────────────────────────── */
 .ext-container {
   flex: 1;
   min-width: 0;
+  height: 100vh;
+  overflow-y: auto;
 }
 .markdown-body {
   box-sizing: border-box;
@@ -418,37 +553,70 @@ body {
 }
 @media print {
   body { display: block; }
-  .ext-sidebar { display: none !important; }
+  .ext-toc-panel { display: none !important; }
   .markdown-body { max-width: none; padding: 0; }
+}
+/* ── Resize handle ──────────────────────────────────────── */
+.ext-toc-resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 5px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 10;
+  background: transparent;
+  transition: background 0.15s ease;
+}
+.ext-toc-resize-handle:hover,
+.ext-toc-resize-handle.dragging {
+  background: var(--fgColor-accent, #0969da);
+  opacity: 0.35;
 }
 </style>
 </head>
 <body>
-  <aside class="ext-sidebar">
-    <button id="ext-theme-toggle" class="ext-icon-btn" title="Toggle light/dark theme">
-      <svg id="ext-icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="4"></circle>
-        <line x1="12" y1="2" x2="12" y2="4"></line>
-        <line x1="12" y1="20" x2="12" y2="22"></line>
-        <line x1="4.93" y1="4.93" x2="6.34" y2="6.34"></line>
-        <line x1="17.66" y1="17.66" x2="19.07" y2="19.07"></line>
-        <line x1="2" y1="12" x2="4" y2="12"></line>
-        <line x1="20" y1="12" x2="22" y2="12"></line>
-        <line x1="4.93" y1="19.07" x2="6.34" y2="17.66"></line>
-        <line x1="17.66" y1="6.34" x2="19.07" y2="4.93"></line>
-      </svg>
-      <svg id="ext-icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none">
-        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-      </svg>
-    </button>
-    <button id="ext-print" class="ext-icon-btn" title="Print / Save PDF">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <polyline points="6 9 6 2 18 2 18 9"></polyline>
-        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
-        <rect x="6" y="14" width="12" height="8"></rect>
-      </svg>
-    </button>
-  </aside>
+  <nav class="ext-toc-panel" id="ext-toc-panel" aria-label="Table of contents">
+    <div class="ext-toc-resize-handle" id="ext-toc-resize-handle" aria-hidden="true"></div>
+    <div class="ext-toc-header">
+      <button class="ext-toc-toggle" id="ext-toc-toggle" title="Toggle table of contents" aria-label="Toggle table of contents">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+      </button>
+      <span class="ext-toc-title">Index</span>
+      <div class="ext-toc-actions">
+        <button id="ext-theme-toggle" class="ext-icon-btn" title="Toggle light/dark theme" aria-label="Toggle light/dark theme">
+          <svg id="ext-icon-sun" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="4"></circle>
+            <line x1="12" y1="2" x2="12" y2="4"></line>
+            <line x1="12" y1="20" x2="12" y2="22"></line>
+            <line x1="4.93" y1="4.93" x2="6.34" y2="6.34"></line>
+            <line x1="17.66" y1="17.66" x2="19.07" y2="19.07"></line>
+            <line x1="2" y1="12" x2="4" y2="12"></line>
+            <line x1="20" y1="12" x2="22" y2="12"></line>
+            <line x1="4.93" y1="19.07" x2="6.34" y2="17.66"></line>
+            <line x1="17.66" y1="6.34" x2="19.07" y2="4.93"></line>
+          </svg>
+          <svg id="ext-icon-moon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+        </button>
+        <button id="ext-print" class="ext-icon-btn" title="Print / Save PDF" aria-label="Print or save as PDF">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 6 2 18 2 18 9"></polyline>
+            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+            <rect x="6" y="14" width="12" height="8"></rect>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div class="ext-toc-body">
+      ${tocHtml}
+    </div>
+  </nav>
   <main class="ext-container">
     <article class="markdown-body" id="ext-content" data-theme="${resolvedTheme}">${bodyHtml}</article>
   </main>
@@ -456,14 +624,126 @@ body {
 <script>
   // Register click handlers synchronously so they always work even if mermaid fails
   (function () {
-    const htmlEl = document.documentElement;
     const content = document.getElementById('ext-content');
+    const tocPanel = document.getElementById('ext-toc-panel');
     const linkMap = ${JSON.stringify(linkMap)};
 
+    // ── TOC panel collapse/expand ────────────────────────────
+    const TOC_COLLAPSED_KEY = 'md-index-toc-collapsed';
+    const TOC_WIDTH_KEY = 'md-index-toc-width';
+    function applyTocState(collapsed) {
+      if (collapsed) {
+        tocPanel.classList.add('collapsed');
+        tocPanel.style.width = '';
+        tocPanel.style.minWidth = '';
+      } else {
+        tocPanel.classList.remove('collapsed');
+        const w = parseInt(localStorage.getItem(TOC_WIDTH_KEY) || '0', 10);
+        if (w >= 160) {
+          tocPanel.style.width = w + 'px';
+          tocPanel.style.minWidth = w + 'px';
+        }
+      }
+    }
+    const initCollapsed = localStorage.getItem(TOC_COLLAPSED_KEY) === 'true';
+    applyTocState(initCollapsed);
+
+    // Restore persisted width (only when not collapsed)
+    const savedWidth = parseInt(localStorage.getItem(TOC_WIDTH_KEY) || '0', 10);
+    if (savedWidth >= 160 && !initCollapsed) {
+      tocPanel.style.width = savedWidth + 'px';
+      tocPanel.style.minWidth = savedWidth + 'px';
+    }
+
+    document.getElementById('ext-toc-toggle').addEventListener('click', () => {
+      const nowCollapsed = !tocPanel.classList.contains('collapsed');
+      applyTocState(nowCollapsed);
+      localStorage.setItem(TOC_COLLAPSED_KEY, String(nowCollapsed));
+    });
+
+    // ── TOC panel resize ─────────────────────────────────────
+    const resizeHandle = document.getElementById('ext-toc-resize-handle');
+    let isResizing = false;
+    let resizeStartX = 0;
+    let resizeStartWidth = 0;
+    resizeHandle.addEventListener('mousedown', (e) => {
+      if (tocPanel.classList.contains('collapsed')) return;
+      isResizing = true;
+      resizeStartX = e.clientX;
+      resizeStartWidth = tocPanel.offsetWidth;
+      resizeHandle.classList.add('dragging');
+      // Disable transition during drag for snappy feel
+      tocPanel.style.transition = 'none';
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    });
+    document.addEventListener('mousemove', (e) => {
+      if (!isResizing) return;
+      const delta = e.clientX - resizeStartX;
+      const newWidth = Math.max(160, Math.min(600, resizeStartWidth + delta));
+      tocPanel.style.width = newWidth + 'px';
+      tocPanel.style.minWidth = newWidth + 'px';
+    });
+    document.addEventListener('mouseup', () => {
+      if (!isResizing) return;
+      isResizing = false;
+      resizeHandle.classList.remove('dragging');
+      tocPanel.style.transition = '';
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      localStorage.setItem(TOC_WIDTH_KEY, String(tocPanel.offsetWidth));
+    });
+
+    // ── Active TOC link tracking (scroll spy) ────────────────
+    const tocLinks = Array.from(document.querySelectorAll('.ext-toc-link'));
+    function updateActiveTocLink() {
+      const headingEls = Array.from(content.querySelectorAll('h1,h2,h3,h4,h5,h6'));
+      let active = null;
+      const container = document.querySelector('.ext-container');
+      const scrollTop = container.scrollTop;
+      for (const el of headingEls) {
+        if (el.offsetTop <= scrollTop + 80) {
+          active = el;
+        }
+      }
+      const activeLine = active ? active.getAttribute('data-line') : null;
+      for (const link of tocLinks) {
+        if (activeLine && link.getAttribute('data-line') === activeLine) {
+          link.classList.add('active');
+        } else {
+          link.classList.remove('active');
+        }
+      }
+    }
+    const container = document.querySelector('.ext-container');
+    if (container) {
+      container.addEventListener('scroll', updateActiveTocLink, { passive: true });
+    }
+    updateActiveTocLink();
+
+    // ── TOC link smooth scroll ───────────────────────────────
+    for (const link of tocLinks) {
+      link.addEventListener('click', (event) => {
+        event.preventDefault();
+        const line = link.getAttribute('data-line');
+        let targetEl = line ? content.querySelector('[data-line="' + line + '"]') : null;
+        if (!targetEl) {
+          const text = decodeURIComponent(link.getAttribute('data-text') || '');
+          const headings = Array.from(content.querySelectorAll('h1,h2,h3,h4,h5,h6'));
+          targetEl = headings.find(h => h.textContent.trim() === text);
+        }
+        if (targetEl) {
+          targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+    }
+
+    // ── Print button ─────────────────────────────────────────
     document.getElementById('ext-print').addEventListener('click', () => {
       window.print();
     });
 
+    // ── Content link navigation ──────────────────────────────
     content.addEventListener('click', (event) => {
       const anchor = event.target.closest('a');
       if (!anchor) return;
@@ -501,7 +781,7 @@ body {
         return;
       }
 
-      const pathParts = (currentDir + '/' + decodeURIComponent(cleanHref)).split(/[\\\\/]/);
+      const pathParts = (currentDir + '/' + decodeURIComponent(cleanHref)).split(/[\\\/]/);
       const stack = [];
       for (const part of pathParts) {
         if (part === '' || part === '.') continue;
@@ -607,9 +887,7 @@ body {
       return;
     }
     try {
-      vscode.window.showInformationMessage(`[md-index] Opening browser for: ${this.documentUri.fsPath}`);
       const mainHtmlPath = await this.generateExternalPreview(this.documentUri);
-      vscode.window.showInformationMessage(`[md-index] HTML written to: ${mainHtmlPath}`);
       await vscode.env.openExternal(vscode.Uri.file(mainHtmlPath));
     } catch (err) {
       vscode.window.showErrorMessage(`[md-index] openInBrowser error: ${err}`);
