@@ -1,3 +1,4 @@
+import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -149,6 +150,7 @@ export class MarkdownPreviewPanel {
     const current = MarkdownPreviewPanel.panels.get(document.uri.toString());
     if (current) {
       current.render(document);
+      void current.updateExternalPreviewFile(document.uri);
     }
   }
 
@@ -276,11 +278,22 @@ export class MarkdownPreviewPanel {
    * standalone HTML file (with the same CSS inlined) and open it in the
    * user's default browser, which supports printing natively.
    */
-  private async createExternalHtml(autoPrint: boolean = false): Promise<string> {
-    if (!this.documentUri) {
-      return '';
+  private async generateExternalPreview(
+    docUri: vscode.Uri,
+    autoPrint: boolean = false,
+    visited: Set<string> = new Set(),
+    depth: number = 0,
+    maxDepth: number = 3,
+  ): Promise<string> {
+    const canonicalKey = docUri.toString();
+    const tmpFileName = `md-preview-${crypto.createHash('sha256').update(canonicalKey).digest('hex').slice(0, 16)}.html`;
+    const tmpPath = path.join(os.tmpdir(), tmpFileName);
+
+    if (visited.has(canonicalKey)) {
+      return tmpPath;
     }
-    const doc = await vscode.workspace.openTextDocument(this.documentUri);
+    visited.add(canonicalKey);
+    const doc = await vscode.workspace.openTextDocument(docUri);
     const bodyHtml = MarkdownPreviewPanel.md.render(doc.getText());
     const theme = vscode.workspace
       .getConfiguration('markdownIndex')
@@ -294,9 +307,52 @@ export class MarkdownPreviewPanel {
       fs.readFileSync(path.join(previewDir, 'hljs-theme.css'), 'utf8'),
     ].join('\n');
     const mermaidJs = fs.readFileSync(path.join(previewDir, 'mermaid.min.js'), 'utf8');
-    const mermaidTheme = resolvedTheme === 'dark' ? 'dark' : 'default';
 
-    return `<!DOCTYPE html>
+    // Pre-generate external HTML previews for linked relative markdown documents (bounded by maxDepth)
+    const linkMap: Record<string, string> = {};
+
+    if (depth < maxDepth) {
+      const rawText = doc.getText();
+      const rawMdLinkRegex = /\[[^\]]*\]\(([^)]+)\)/g;
+      const htmlLinkRegex = /href=["']([^"']+)["']/gi;
+      const hrefsToProcess = new Set<string>();
+
+      let m: RegExpExecArray | null;
+      while ((m = rawMdLinkRegex.exec(rawText)) !== null) {
+        if (m[1]) hrefsToProcess.add(m[1].trim());
+      }
+      while ((m = htmlLinkRegex.exec(bodyHtml)) !== null) {
+        if (m[1]) hrefsToProcess.add(m[1].trim());
+      }
+
+      for (const href of hrefsToProcess) {
+        if (!href || href.startsWith('#') || /^(https?|mailto):/i.test(href)) {
+          continue;
+        }
+        const [pathPart] = href.split('#');
+        if (!pathPart) continue;
+
+        try {
+          const decodedPath = decodeURIComponent(pathPart);
+          const baseDir = vscode.Uri.joinPath(docUri, '..');
+          const targetUri = vscode.Uri.joinPath(baseDir, decodedPath);
+          if (/\.(md|markdown|mdown|mkd)$/i.test(targetUri.fsPath)) {
+            const stat = await vscode.workspace.fs.stat(targetUri);
+            if (stat) {
+              const targetTmpHtml = await this.generateExternalPreview(targetUri, false, visited, depth + 1, maxDepth);
+              linkMap[href] = targetTmpHtml;
+              linkMap[pathPart] = targetTmpHtml;
+              linkMap[decodedPath] = targetTmpHtml;
+              linkMap[targetUri.fsPath] = targetTmpHtml;
+            }
+          }
+        } catch {
+          // Skip unresolvable files
+        }
+      }
+    }
+
+    const htmlContent = `<!DOCTYPE html>
 <html lang="en" data-theme="${resolvedTheme}">
 <head>
 <meta charset="UTF-8">
@@ -398,6 +454,88 @@ body {
   </main>
 <script>${mermaidJs}</script>
 <script>
+  // Register click handlers synchronously so they always work even if mermaid fails
+  (function () {
+    const htmlEl = document.documentElement;
+    const content = document.getElementById('ext-content');
+    const linkMap = ${JSON.stringify(linkMap)};
+
+    document.getElementById('ext-print').addEventListener('click', () => {
+      window.print();
+    });
+
+    content.addEventListener('click', (event) => {
+      const anchor = event.target.closest('a');
+      if (!anchor) return;
+      const href = anchor.getAttribute('href');
+      if (!href) return;
+
+      if (href.startsWith('#')) {
+        event.preventDefault();
+        const targetId = href.substring(1);
+        const decodedId = decodeURIComponent(targetId);
+        const targetEl = document.getElementById(decodedId) ||
+                         document.getElementById(targetId) ||
+                         document.querySelector('[id="' + CSS.escape(decodedId) + '"]');
+        if (targetEl) {
+          targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        return;
+      }
+
+      if (/^(https?|mailto):/i.test(href)) {
+        return;
+      }
+
+      event.preventDefault();
+      const currentDir = ${JSON.stringify(path.dirname(doc.fileName))};
+      const cleanHref = href.split('#')[0];
+      const hashPart = href.includes('#') ? '#' + href.split('#')[1] : '';
+      if (!cleanHref) return;
+
+      console.log('[md-index] click href:', href, 'cleanHref:', cleanHref, 'linkMap keys:', Object.keys(linkMap));
+
+      if (linkMap[href] || linkMap[cleanHref] || linkMap[decodeURIComponent(cleanHref)]) {
+        const targetHtml = linkMap[href] || linkMap[cleanHref] || linkMap[decodeURIComponent(cleanHref)];
+        window.location.href = 'file://' + targetHtml + hashPart;
+        return;
+      }
+
+      const pathParts = (currentDir + '/' + decodeURIComponent(cleanHref)).split(/[\\\\/]/);
+      const stack = [];
+      for (const part of pathParts) {
+        if (part === '' || part === '.') continue;
+        if (part === '..') {
+          if (stack.length > 0) stack.pop();
+        } else {
+          stack.push(part);
+        }
+      }
+      const absolutePath = (currentDir.startsWith('/') ? '/' : '') + stack.join('/');
+
+      if (linkMap[absolutePath]) {
+        window.location.href = 'file://' + linkMap[absolutePath] + hashPart;
+        return;
+      }
+
+      const isMarkdown = /\.(md|markdown|mdown|mkd)$/i.test(absolutePath);
+      if (isMarkdown) {
+        const canonicalKey = 'file://' + (absolutePath.startsWith('/') ? '' : '/') + absolutePath.split('/').map(encodeURIComponent).join('/');
+        let hex = '';
+        for (let i = 0; i < canonicalKey.length; i++) {
+          hex += canonicalKey.charCodeAt(i).toString(16).padStart(2, '0');
+        }
+        const hash = hex.slice(0, 16);
+        const tmpDir = ${JSON.stringify(os.tmpdir())};
+        const targetHtmlPath = tmpDir + '/md-preview-' + hash + '.html';
+        window.location.href = 'file://' + targetHtmlPath + hashPart;
+      } else {
+        window.location.href = 'file://' + absolutePath + hashPart;
+      }
+    });
+  }());
+
+  // Async mermaid + theme initialisation (runs independently from click handlers)
   (async function () {
     const htmlEl = document.documentElement;
     const content = document.getElementById('ext-content');
@@ -410,8 +548,10 @@ body {
     }
 
     async function renderMermaid(theme) {
-      mermaid.initialize({ startOnLoad: false, theme: mermaidThemeFor(theme) });
-      await mermaid.run({ querySelector: '#ext-content pre.mermaid' });
+      try {
+        mermaid.initialize({ startOnLoad: false, theme: mermaidThemeFor(theme) });
+        await mermaid.run({ querySelector: '#ext-content pre.mermaid' });
+      } catch (_) {}
     }
 
     function updateTheme(theme) {
@@ -431,10 +571,6 @@ body {
       await renderMermaid(next);
     });
 
-    document.getElementById('ext-print').addEventListener('click', () => {
-      window.print();
-    });
-
     if (${autoPrint}) {
       setTimeout(() => {
         window.print();
@@ -444,26 +580,40 @@ body {
 </script>
 </body>
 </html>`;
+
+    fs.writeFileSync(tmpPath, htmlContent, 'utf8');
+    return tmpPath;
+  }
+
+  private async updateExternalPreviewFile(docUri: vscode.Uri): Promise<void> {
+    const hash = crypto.createHash('sha256').update(docUri.toString()).digest('hex').slice(0, 16);
+    const tmpPath = path.join(os.tmpdir(), `md-preview-${hash}.html`);
+    if (fs.existsSync(tmpPath)) {
+      await this.generateExternalPreview(docUri, false);
+    }
   }
 
   private async printCurrentDocument(): Promise<void> {
     if (!this.documentUri) {
       return;
     }
-    const html = await this.createExternalHtml(true);
-    const tmpFile = path.join(os.tmpdir(), `markdown-index-print-${Date.now()}.html`);
-    fs.writeFileSync(tmpFile, html, 'utf8');
-    await vscode.env.openExternal(vscode.Uri.file(tmpFile));
+    const mainHtmlPath = await this.generateExternalPreview(this.documentUri, true);
+    await vscode.env.openExternal(vscode.Uri.file(mainHtmlPath));
   }
 
   private async openInBrowser(): Promise<void> {
     if (!this.documentUri) {
+      vscode.window.showErrorMessage('[md-index] openInBrowser: documentUri is not set');
       return;
     }
-    const html = await this.createExternalHtml(false);
-    const tmpFile = path.join(os.tmpdir(), `markdown-index-preview-${Date.now()}.html`);
-    fs.writeFileSync(tmpFile, html, 'utf8');
-    await vscode.env.openExternal(vscode.Uri.file(tmpFile));
+    try {
+      vscode.window.showInformationMessage(`[md-index] Opening browser for: ${this.documentUri.fsPath}`);
+      const mainHtmlPath = await this.generateExternalPreview(this.documentUri);
+      vscode.window.showInformationMessage(`[md-index] HTML written to: ${mainHtmlPath}`);
+      await vscode.env.openExternal(vscode.Uri.file(mainHtmlPath));
+    } catch (err) {
+      vscode.window.showErrorMessage(`[md-index] openInBrowser error: ${err}`);
+    }
   }
 
   private async revealLine(line: number): Promise<void> {
