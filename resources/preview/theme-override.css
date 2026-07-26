@@ -26,6 +26,25 @@
   background: transparent;
 }
 
+/*
+ * VS Code's webview host injects a default stylesheet (`@layer vscode-default`)
+ * setting `code { color: var(--vscode-textPreformat-foreground); }`.
+ * github-markdown.css sets `background-color` on `code` but no `color`, allowing
+ * VS Code's ambient preformat text color to take over and cause poor contrast
+ * in the custom preview panel. Explicitly setting `color: var(--fgColor-default)`
+ * on inline code (and `inherit` inside links) guarantees strong contrast.
+ */
+.markdown-body code,
+.markdown-body tt {
+  color: var(--fgColor-default);
+  background-color: var(--bgColor-neutral-muted);
+}
+
+.markdown-body a code,
+.markdown-body a tt {
+  color: inherit;
+}
+
 .markdown-body[data-theme="dark"] {
   color-scheme: dark;
   --fgColor-accent: #4493f8;
