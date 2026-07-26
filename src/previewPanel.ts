@@ -36,6 +36,80 @@ function resolveTheme(pref: PreviewTheme): ResolvedTheme {
 }
 
 /**
+ * Resolves image src/srcset attributes in rendered HTML to either:
+ * - Webview URIs (when `webview` is provided) for the VS Code custom preview panel.
+ * - Absolute `file://` URIs (when `webview` is omitted) for external browser previews.
+ */
+function resolveImageSrcs(
+  html: string,
+  docUri: vscode.Uri,
+  webview?: vscode.Webview,
+): string {
+  const baseDir = vscode.Uri.joinPath(docUri, '..');
+
+  const resolveSingleUrl = (urlStr: string): string => {
+    const trimmed = urlStr.trim();
+    if (!trimmed || /^(https?|data|vscode-webview|vscode-file):/i.test(trimmed)) {
+      return trimmed;
+    }
+
+    // Separate path from query/hash if present
+    const match = trimmed.match(/^([^?#]*)(.*)$/);
+    const pathPart = match ? match[1] : trimmed;
+    const suffix = match ? match[2] : '';
+
+    try {
+      let imageUri: vscode.Uri;
+      if (pathPart.startsWith('file://')) {
+        imageUri = vscode.Uri.parse(pathPart);
+      } else if (path.isAbsolute(pathPart) || pathPart.startsWith('/') || pathPart.startsWith('\\')) {
+        imageUri = vscode.Uri.file(pathPart);
+      } else {
+        let decodedPath = pathPart;
+        try {
+          decodedPath = decodeURIComponent(pathPart);
+        } catch {
+          // Fall back to un-decoded path if percent-decoding fails
+        }
+        imageUri = vscode.Uri.joinPath(baseDir, decodedPath);
+      }
+
+      const resolvedBase = webview
+        ? webview.asWebviewUri(imageUri).toString()
+        : imageUri.toString();
+
+      return resolvedBase + suffix;
+    } catch {
+      return trimmed;
+    }
+  };
+
+  return html.replace(/<img\b([^>]*?)>/gi, (imgTag) => {
+    return imgTag.replace(/\b(src|srcset)=["']([^"']+)["']/gi, (attrMatch, attrName, attrValue) => {
+      if (attrName.toLowerCase() === 'srcset') {
+        const resolvedSrcset = attrValue
+          .split(',')
+          .map((part: string) => {
+            const trimmed = part.trim();
+            const spaceIdx = trimmed.lastIndexOf(' ');
+            if (spaceIdx > 0) {
+              const url = trimmed.slice(0, spaceIdx);
+              const descriptor = trimmed.slice(spaceIdx);
+              return `${resolveSingleUrl(url)}${descriptor}`;
+            }
+            return resolveSingleUrl(trimmed);
+          })
+          .join(', ');
+        return `${attrName}="${resolvedSrcset}"`;
+      } else {
+        return `${attrName}="${resolveSingleUrl(attrValue)}"`;
+      }
+    });
+  });
+}
+
+
+/**
  * Custom markdown preview panel: GitHub-styled rendering with print support,
  * a light/dark theme toggle, and double-click-to-source navigation.
  */
@@ -128,7 +202,12 @@ export class MarkdownPreviewPanel {
       { viewColumn: column, preserveFocus: true },
       {
         enableScripts: true,
-        localResourceRoots: [vscode.Uri.joinPath(extensionUri, 'resources', 'preview')],
+        localResourceRoots: [
+          vscode.Uri.joinPath(extensionUri, 'resources', 'preview'),
+          ...(vscode.workspace.workspaceFolders?.map((f) => f.uri) ?? []),
+          vscode.Uri.joinPath(document.uri, '..'),
+          ...(document.uri.scheme === 'file' ? [vscode.Uri.file(path.parse(document.fileName).root)] : []),
+        ],
         // Without this, VS Code tears down the webview's iframe/JS context
         // whenever it's not the visible tab (not just unfocused) to save
         // memory. That means postMessage-based live updates (see render())
@@ -199,7 +278,8 @@ export class MarkdownPreviewPanel {
   }
 
   private render(document: vscode.TextDocument): void {
-    const html = MarkdownPreviewPanel.md.render(document.getText());
+    const rawHtml = MarkdownPreviewPanel.md.render(document.getText());
+    const html = resolveImageSrcs(rawHtml, document.uri, this.panel.webview);
     void this.panel.webview.postMessage({ type: 'update', html });
   }
 
@@ -296,7 +376,8 @@ export class MarkdownPreviewPanel {
     visited.add(canonicalKey);
     const doc = await vscode.workspace.openTextDocument(docUri);
     const rawText = doc.getText();
-    const bodyHtml = MarkdownPreviewPanel.md.render(rawText);
+    const rawHtml = MarkdownPreviewPanel.md.render(rawText);
+    const bodyHtml = resolveImageSrcs(rawHtml, docUri);
     const theme = vscode.workspace
       .getConfiguration('markdownIndex')
       .get<PreviewTheme>('previewTheme', 'auto');
@@ -915,7 +996,8 @@ body {
   }
 
   private renderFull(document: vscode.TextDocument): void {
-    const html = MarkdownPreviewPanel.md.render(document.getText());
+    const rawHtml = MarkdownPreviewPanel.md.render(document.getText());
+    const html = resolveImageSrcs(rawHtml, document.uri, this.panel.webview);
     this.panel.webview.html = this.getHtmlForWebview(html);
   }
 
@@ -953,7 +1035,7 @@ body {
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} https: data:; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} https: http: data:; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
 <link rel="stylesheet" href="${cssUri}">
 <link rel="stylesheet" href="${themeOverrideCssUri}">
 <link rel="stylesheet" href="${hljsThemeCssUri}">
