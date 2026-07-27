@@ -155,6 +155,24 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   context.subscriptions.push(
+    vscode.commands.registerCommand('markdownIndex.openBrowserPreview', async (uri?: vscode.Uri) => {
+      let targetUri = uri;
+      if (!targetUri || !targetUri.scheme) {
+        const activeDoc = await getActiveMarkdownDocument();
+        targetUri = activeDoc?.uri;
+      }
+      if (targetUri) {
+        try {
+          await MarkdownPreviewPanel.openInBrowser(context.extensionUri, targetUri);
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.error('markdown-index: failed to open browser preview for uri', targetUri, err);
+        }
+      }
+    }),
+  );
+
+  context.subscriptions.push(
     vscode.commands.registerCommand('markdownIndex.refresh', async () => {
       await updateTreeForActiveDocument();
     }),

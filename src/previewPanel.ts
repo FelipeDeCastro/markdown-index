@@ -400,7 +400,8 @@ export class MarkdownPreviewPanel {
    * standalone HTML file (with the same CSS inlined) and open it in the
    * user's default browser, which supports printing natively.
    */
-  private async generateExternalPreview(
+  private static async generateExternalPreview(
+    extensionUri: vscode.Uri,
     docUri: vscode.Uri,
     autoPrint: boolean = false,
     visited: Set<string> = new Set(),
@@ -424,7 +425,7 @@ export class MarkdownPreviewPanel {
       .get<PreviewTheme>('previewTheme', 'auto');
     const resolvedTheme = autoPrint ? 'light' : resolveTheme(theme);
 
-    const previewDir = vscode.Uri.joinPath(this.extensionUri, 'resources', 'preview').fsPath;
+    const previewDir = vscode.Uri.joinPath(extensionUri, 'resources', 'preview').fsPath;
     const css = [
       fs.readFileSync(path.join(previewDir, 'github-markdown.css'), 'utf8'),
       fs.readFileSync(path.join(previewDir, 'theme-override.css'), 'utf8'),
@@ -479,7 +480,7 @@ export class MarkdownPreviewPanel {
           if (/\.(md|markdown|mdown|mkd)$/i.test(targetUri.fsPath)) {
             const stat = await vscode.workspace.fs.stat(targetUri);
             if (stat) {
-              const targetTmpHtml = await this.generateExternalPreview(targetUri, false, visited, depth + 1, maxDepth);
+              const targetTmpHtml = await MarkdownPreviewPanel.generateExternalPreview(extensionUri, targetUri, false, visited, depth + 1, maxDepth);
               linkMap[href] = targetTmpHtml;
               linkMap[pathPart] = targetTmpHtml;
               linkMap[decodedPath] = targetTmpHtml;
@@ -1142,7 +1143,7 @@ body {
     const hash = crypto.createHash('sha256').update(docUri.toString()).digest('hex').slice(0, 16);
     const tmpPath = path.join(os.tmpdir(), `md-preview-${hash}.html`);
     if (fs.existsSync(tmpPath)) {
-      await this.generateExternalPreview(docUri, false);
+      await MarkdownPreviewPanel.generateExternalPreview(this.extensionUri, docUri, false);
     }
   }
 
@@ -1150,8 +1151,17 @@ body {
     if (!this.documentUri) {
       return;
     }
-    const mainHtmlPath = await this.generateExternalPreview(this.documentUri, true);
+    const mainHtmlPath = await MarkdownPreviewPanel.generateExternalPreview(this.extensionUri, this.documentUri, true);
     await vscode.env.openExternal(vscode.Uri.file(mainHtmlPath));
+  }
+
+  static async openInBrowser(extensionUri: vscode.Uri, docUri: vscode.Uri): Promise<void> {
+    try {
+      const mainHtmlPath = await MarkdownPreviewPanel.generateExternalPreview(extensionUri, docUri);
+      await vscode.env.openExternal(vscode.Uri.file(mainHtmlPath));
+    } catch (err) {
+      vscode.window.showErrorMessage(`[md-index] openInBrowser error: ${err}`);
+    }
   }
 
   private async openInBrowser(): Promise<void> {
@@ -1159,12 +1169,7 @@ body {
       vscode.window.showErrorMessage('[md-index] openInBrowser: documentUri is not set');
       return;
     }
-    try {
-      const mainHtmlPath = await this.generateExternalPreview(this.documentUri);
-      await vscode.env.openExternal(vscode.Uri.file(mainHtmlPath));
-    } catch (err) {
-      vscode.window.showErrorMessage(`[md-index] openInBrowser error: ${err}`);
-    }
+    await MarkdownPreviewPanel.openInBrowser(this.extensionUri, this.documentUri);
   }
 
   private async revealLine(line: number): Promise<void> {
