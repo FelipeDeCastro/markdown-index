@@ -164,6 +164,13 @@
           "when": "view == markdownIndex || view == markdownIndexSidebarView",
           "group": "navigation@2"
         }
+      ],
+      "explorer/context": [
+        {
+          "command": "markdownIndex.openCustomPreview",
+          "when": "resourceLangId == markdown",
+          "group": "navigation"
+        }
       ]
     },
     "configuration": {

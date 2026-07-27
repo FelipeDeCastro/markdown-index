@@ -69,8 +69,18 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('markdownIndex.openCustomPreview', async () => {
-      await openPreviewForActiveOrVisibleMarkdown();
+    vscode.commands.registerCommand('markdownIndex.openCustomPreview', async (uri?: vscode.Uri) => {
+      if (uri && uri.scheme) {
+        try {
+          const doc = await vscode.workspace.openTextDocument(uri);
+          await MarkdownPreviewPanel.createOrShow(context.extensionUri, doc);
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.error('markdown-index: failed to open preview for uri', uri, err);
+        }
+      } else {
+        await openPreviewForActiveOrVisibleMarkdown();
+      }
     }),
   );
 
