@@ -381,7 +381,7 @@ export class MarkdownPreviewPanel {
     const theme = vscode.workspace
       .getConfiguration('markdownIndex')
       .get<PreviewTheme>('previewTheme', 'auto');
-    const resolvedTheme = resolveTheme(theme);
+    const resolvedTheme = autoPrint ? 'light' : resolveTheme(theme);
 
     const previewDir = vscode.Uri.joinPath(this.extensionUri, 'resources', 'preview').fsPath;
     const css = [
@@ -637,6 +637,8 @@ body {
     height: auto !important;
     overflow: visible !important;
     display: block !important;
+    background-color: #ffffff !important;
+    color: #1f2328 !important;
   }
   .ext-toc-panel {
     display: none !important;
@@ -650,6 +652,113 @@ body {
     max-width: 100% !important;
     padding: 0 !important;
     margin: 0 auto !important;
+    background-color: #ffffff !important;
+    color: #1f2328 !important;
+  }
+  /* Enforce Light Theme variables during print regardless of dark data-theme */
+  .markdown-body,
+  .markdown-body[data-theme="dark"],
+  .markdown-body[data-theme="light"] {
+    color-scheme: light !important;
+    --fgColor-default: #1f2328 !important;
+    --fgColor-muted: #59636e !important;
+    --fgColor-accent: #0969da !important;
+    --fgColor-success: #1a7f37 !important;
+    --fgColor-attention: #9a6700 !important;
+    --fgColor-danger: #d1242f !important;
+    --fgColor-done: #8250df !important;
+    --bgColor-default: #ffffff !important;
+    --bgColor-muted: #f6f8fa !important;
+    --bgColor-neutral-muted: #818b981f !important;
+    --bgColor-attention-muted: #fff8c5 !important;
+    --borderColor-default: #d1d9e0 !important;
+    --borderColor-muted: #d1d9e0b3 !important;
+    --borderColor-neutral-muted: #d1d9e0b3 !important;
+    --borderColor-accent-emphasis: #0969da !important;
+    --borderColor-attention-emphasis: #9a6700 !important;
+    --borderColor-danger-emphasis: #cf222e !important;
+    --borderColor-done-emphasis: #8250df !important;
+    --borderColor-success-emphasis: #1a7f37 !important;
+  }
+  .markdown-body code,
+  .markdown-body tt {
+    color: #1f2328 !important;
+    background-color: #818b981f !important;
+  }
+  /* Enforce Light Theme for syntax highlighting (highlight.js) */
+  .markdown-body[data-theme="dark"] .hljs {
+    color: #24292e !important;
+    background: #ffffff !important;
+  }
+  .markdown-body[data-theme="dark"] .hljs-doctag,
+  .markdown-body[data-theme="dark"] .hljs-keyword,
+  .markdown-body[data-theme="dark"] .hljs-meta .hljs-keyword,
+  .markdown-body[data-theme="dark"] .hljs-template-tag,
+  .markdown-body[data-theme="dark"] .hljs-template-variable,
+  .markdown-body[data-theme="dark"] .hljs-type,
+  .markdown-body[data-theme="dark"] .hljs-variable.language_ {
+    color: #d73a49 !important;
+  }
+  .markdown-body[data-theme="dark"] .hljs-title,
+  .markdown-body[data-theme="dark"] .hljs-title.class_,
+  .markdown-body[data-theme="dark"] .hljs-title.class_.inherited__,
+  .markdown-body[data-theme="dark"] .hljs-title.function_ {
+    color: #6f42c1 !important;
+  }
+  .markdown-body[data-theme="dark"] .hljs-attr,
+  .markdown-body[data-theme="dark"] .hljs-attribute,
+  .markdown-body[data-theme="dark"] .hljs-literal,
+  .markdown-body[data-theme="dark"] .hljs-meta,
+  .markdown-body[data-theme="dark"] .hljs-number,
+  .markdown-body[data-theme="dark"] .hljs-operator,
+  .markdown-body[data-theme="dark"] .hljs-variable,
+  .markdown-body[data-theme="dark"] .hljs-selector-attr,
+  .markdown-body[data-theme="dark"] .hljs-selector-class,
+  .markdown-body[data-theme="dark"] .hljs-selector-id {
+    color: #005cc5 !important;
+  }
+  .markdown-body[data-theme="dark"] .hljs-regexp,
+  .markdown-body[data-theme="dark"] .hljs-string,
+  .markdown-body[data-theme="dark"] .hljs-meta .hljs-string {
+    color: #032f62 !important;
+  }
+  .markdown-body[data-theme="dark"] .hljs-built_in,
+  .markdown-body[data-theme="dark"] .hljs-symbol {
+    color: #e36209 !important;
+  }
+  .markdown-body[data-theme="dark"] .hljs-comment,
+  .markdown-body[data-theme="dark"] .hljs-code,
+  .markdown-body[data-theme="dark"] .hljs-formula {
+    color: #6a737d !important;
+  }
+  .markdown-body[data-theme="dark"] .hljs-name,
+  .markdown-body[data-theme="dark"] .hljs-quote,
+  .markdown-body[data-theme="dark"] .hljs-selector-tag,
+  .markdown-body[data-theme="dark"] .hljs-selector-pseudo {
+    color: #22863a !important;
+  }
+  .markdown-body[data-theme="dark"] .hljs-subst {
+    color: #24292e !important;
+  }
+  .markdown-body[data-theme="dark"] .hljs-section {
+    color: #005cc5 !important;
+  }
+  .markdown-body[data-theme="dark"] .hljs-bullet {
+    color: #735c0f !important;
+  }
+  .markdown-body[data-theme="dark"] .hljs-emphasis {
+    color: #24292e !important;
+  }
+  .markdown-body[data-theme="dark"] .hljs-strong {
+    color: #24292e !important;
+  }
+  .markdown-body[data-theme="dark"] .hljs-addition {
+    color: #22863a !important;
+    background-color: #f0fff4 !important;
+  }
+  .markdown-body[data-theme="dark"] .hljs-deletion {
+    color: #b31d28 !important;
+    background-color: #ffeef0 !important;
   }
   pre, code, table, blockquote, img, svg, .mermaid {
     break-inside: avoid;
@@ -955,6 +1064,25 @@ body {
       await renderMermaid(next);
     });
 
+    let prePrintTheme = null;
+    window.addEventListener('beforeprint', async () => {
+      const currentTheme = content.getAttribute('data-theme');
+      if (currentTheme === 'dark') {
+        prePrintTheme = 'dark';
+        content.innerHTML = rawHtml;
+        updateTheme('light');
+        await renderMermaid('light');
+      }
+    });
+    window.addEventListener('afterprint', async () => {
+      if (prePrintTheme === 'dark') {
+        prePrintTheme = null;
+        content.innerHTML = rawHtml;
+        updateTheme('dark');
+        await renderMermaid('dark');
+      }
+    });
+
     if (${autoPrint}) {
       setTimeout(() => {
         window.print();
@@ -1110,6 +1238,8 @@ body {
       height: auto !important;
       overflow: visible !important;
       display: block !important;
+      background-color: #ffffff !important;
+      color: #1f2328 !important;
     }
     .mi-toolbar {
       display: none !important;
@@ -1118,6 +1248,113 @@ body {
       max-width: 100% !important;
       padding: 0 !important;
       margin: 0 auto !important;
+      background-color: #ffffff !important;
+      color: #1f2328 !important;
+    }
+    /* Enforce Light Theme variables during print regardless of dark data-theme */
+    .markdown-body,
+    .markdown-body[data-theme="dark"],
+    .markdown-body[data-theme="light"] {
+      color-scheme: light !important;
+      --fgColor-default: #1f2328 !important;
+      --fgColor-muted: #59636e !important;
+      --fgColor-accent: #0969da !important;
+      --fgColor-success: #1a7f37 !important;
+      --fgColor-attention: #9a6700 !important;
+      --fgColor-danger: #d1242f !important;
+      --fgColor-done: #8250df !important;
+      --bgColor-default: #ffffff !important;
+      --bgColor-muted: #f6f8fa !important;
+      --bgColor-neutral-muted: #818b981f !important;
+      --bgColor-attention-muted: #fff8c5 !important;
+      --borderColor-default: #d1d9e0 !important;
+      --borderColor-muted: #d1d9e0b3 !important;
+      --borderColor-neutral-muted: #d1d9e0b3 !important;
+      --borderColor-accent-emphasis: #0969da !important;
+      --borderColor-attention-emphasis: #9a6700 !important;
+      --borderColor-danger-emphasis: #cf222e !important;
+      --borderColor-done-emphasis: #8250df !important;
+      --borderColor-success-emphasis: #1a7f37 !important;
+    }
+    .markdown-body code,
+    .markdown-body tt {
+      color: #1f2328 !important;
+      background-color: #818b981f !important;
+    }
+    /* Enforce Light Theme for syntax highlighting (highlight.js) */
+    .markdown-body[data-theme="dark"] .hljs {
+      color: #24292e !important;
+      background: #ffffff !important;
+    }
+    .markdown-body[data-theme="dark"] .hljs-doctag,
+    .markdown-body[data-theme="dark"] .hljs-keyword,
+    .markdown-body[data-theme="dark"] .hljs-meta .hljs-keyword,
+    .markdown-body[data-theme="dark"] .hljs-template-tag,
+    .markdown-body[data-theme="dark"] .hljs-template-variable,
+    .markdown-body[data-theme="dark"] .hljs-type,
+    .markdown-body[data-theme="dark"] .hljs-variable.language_ {
+      color: #d73a49 !important;
+    }
+    .markdown-body[data-theme="dark"] .hljs-title,
+    .markdown-body[data-theme="dark"] .hljs-title.class_,
+    .markdown-body[data-theme="dark"] .hljs-title.class_.inherited__,
+    .markdown-body[data-theme="dark"] .hljs-title.function_ {
+      color: #6f42c1 !important;
+    }
+    .markdown-body[data-theme="dark"] .hljs-attr,
+    .markdown-body[data-theme="dark"] .hljs-attribute,
+    .markdown-body[data-theme="dark"] .hljs-literal,
+    .markdown-body[data-theme="dark"] .hljs-meta,
+    .markdown-body[data-theme="dark"] .hljs-number,
+    .markdown-body[data-theme="dark"] .hljs-operator,
+    .markdown-body[data-theme="dark"] .hljs-variable,
+    .markdown-body[data-theme="dark"] .hljs-selector-attr,
+    .markdown-body[data-theme="dark"] .hljs-selector-class,
+    .markdown-body[data-theme="dark"] .hljs-selector-id {
+      color: #005cc5 !important;
+    }
+    .markdown-body[data-theme="dark"] .hljs-regexp,
+    .markdown-body[data-theme="dark"] .hljs-string,
+    .markdown-body[data-theme="dark"] .hljs-meta .hljs-string {
+      color: #032f62 !important;
+    }
+    .markdown-body[data-theme="dark"] .hljs-built_in,
+    .markdown-body[data-theme="dark"] .hljs-symbol {
+      color: #e36209 !important;
+    }
+    .markdown-body[data-theme="dark"] .hljs-comment,
+    .markdown-body[data-theme="dark"] .hljs-code,
+    .markdown-body[data-theme="dark"] .hljs-formula {
+      color: #6a737d !important;
+    }
+    .markdown-body[data-theme="dark"] .hljs-name,
+    .markdown-body[data-theme="dark"] .hljs-quote,
+    .markdown-body[data-theme="dark"] .hljs-selector-tag,
+    .markdown-body[data-theme="dark"] .hljs-selector-pseudo {
+      color: #22863a !important;
+    }
+    .markdown-body[data-theme="dark"] .hljs-subst {
+      color: #24292e !important;
+    }
+    .markdown-body[data-theme="dark"] .hljs-section {
+      color: #005cc5 !important;
+    }
+    .markdown-body[data-theme="dark"] .hljs-bullet {
+      color: #735c0f !important;
+    }
+    .markdown-body[data-theme="dark"] .hljs-emphasis {
+      color: #24292e !important;
+    }
+    .markdown-body[data-theme="dark"] .hljs-strong {
+      color: #24292e !important;
+    }
+    .markdown-body[data-theme="dark"] .hljs-addition {
+      color: #22863a !important;
+      background-color: #f0fff4 !important;
+    }
+    .markdown-body[data-theme="dark"] .hljs-deletion {
+      color: #b31d28 !important;
+      background-color: #ffeef0 !important;
     }
     pre, code, table, blockquote, img, svg, .mermaid {
       break-inside: avoid;

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.15 — 2026-07-27
+
+- Fix printing feature: reset height and overflow constraints in print layout to prevent content clipping and ensure full multi-page PDF rendering.
+- Enforce light theme colors, syntax highlighting, and diagram rendering for all print outputs regardless of active screen theme.
+
 ## Unreleased
 
 - The custom preview panel now supports navigating internal relative links (e.g. `./WORKFLOW.md`), header anchor links (`#heading`), and external URLs (`https://...`).
