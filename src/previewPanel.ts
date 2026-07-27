@@ -633,9 +633,32 @@ body {
   padding: 32px 40px 64px;
 }
 @media print {
-  body { display: block; }
-  .ext-toc-panel { display: none !important; }
-  .markdown-body { max-width: none; padding: 0; }
+  html, body {
+    height: auto !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+  .ext-toc-panel {
+    display: none !important;
+  }
+  .ext-container {
+    height: auto !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+  .markdown-body {
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 auto !important;
+  }
+  pre, code, table, blockquote, img, svg, .mermaid {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
 }
 /* ── Resize handle ──────────────────────────────────────── */
 .ext-toc-resize-handle {
@@ -1083,8 +1106,27 @@ body {
     padding: 24px 32px 64px;
   }
   @media print {
-    .mi-toolbar { display: none; }
-    .markdown-body { max-width: none; padding: 0; }
+    html, body {
+      height: auto !important;
+      overflow: visible !important;
+      display: block !important;
+    }
+    .mi-toolbar {
+      display: none !important;
+    }
+    .markdown-body {
+      max-width: 100% !important;
+      padding: 0 !important;
+      margin: 0 auto !important;
+    }
+    pre, code, table, blockquote, img, svg, .mermaid {
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      break-after: avoid;
+      page-break-after: avoid;
+    }
   }
 </style>
 </head>
