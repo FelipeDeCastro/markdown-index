@@ -171,10 +171,39 @@ export class MarkdownPreviewPanel {
       };
     });
 
+  private static readonly _onDidChangeActivePreview = new vscode.EventEmitter<MarkdownPreviewPanel | undefined>();
+  public static readonly onDidChangeActivePreview = MarkdownPreviewPanel._onDidChangeActivePreview.event;
+
   private readonly panel: vscode.WebviewPanel;
   private readonly extensionUri: vscode.Uri;
   private readonly disposables: vscode.Disposable[] = [];
   private documentUri: vscode.Uri | undefined;
+  private document: vscode.TextDocument | undefined;
+
+  public getDocument(): vscode.TextDocument | undefined {
+    return this.document;
+  }
+
+  public getDocumentUri(): vscode.Uri | undefined {
+    return this.documentUri;
+  }
+
+  public getPanel(): vscode.WebviewPanel {
+    return this.panel;
+  }
+
+  static getActivePreviewPanel(): MarkdownPreviewPanel | undefined {
+    for (const instance of MarkdownPreviewPanel.panels.values()) {
+      if (instance.panel.active) {
+        return instance;
+      }
+    }
+    return undefined;
+  }
+
+  static getAllPanels(): MarkdownPreviewPanel[] {
+    return Array.from(MarkdownPreviewPanel.panels.values());
+  }
 
   static async createOrShow(
     extensionUri: vscode.Uri,
@@ -186,6 +215,7 @@ export class MarkdownPreviewPanel {
       // Focus the existing panel for this file in place — do not move it to a
       // different column, and do not repurpose it for a different document.
       existing.panel.reveal(undefined, false);
+      MarkdownPreviewPanel._onDidChangeActivePreview.fire(existing);
       return;
     }
 
@@ -223,6 +253,7 @@ export class MarkdownPreviewPanel {
     const instance = new MarkdownPreviewPanel(panel, extensionUri);
     MarkdownPreviewPanel.panels.set(key, instance);
     await instance.setDocument(document);
+    MarkdownPreviewPanel._onDidChangeActivePreview.fire(instance);
   }
 
   /** Re-renders the preview for the given document, if a panel for it is open. */
@@ -247,6 +278,15 @@ export class MarkdownPreviewPanel {
     this.extensionUri = extensionUri;
 
     this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
+    this.panel.onDidChangeViewState(
+      () => {
+        if (this.panel.active) {
+          MarkdownPreviewPanel._onDidChangeActivePreview.fire(this);
+        }
+      },
+      null,
+      this.disposables,
+    );
     this.panel.webview.onDidReceiveMessage(
       (message) => this.handleMessage(message),
       null,
@@ -272,6 +312,7 @@ export class MarkdownPreviewPanel {
   }
 
   private async setDocument(document: vscode.TextDocument): Promise<void> {
+    this.document = document;
     this.documentUri = document.uri;
     this.panel.title = `Preview ${path.basename(document.fileName)}`;
     this.renderFull(document);
@@ -1531,6 +1572,7 @@ body {
         MarkdownPreviewPanel.panels.delete(key);
       }
     }
+    MarkdownPreviewPanel._onDidChangeActivePreview.fire(MarkdownPreviewPanel.getActivePreviewPanel());
     this.panel.dispose();
     while (this.disposables.length) {
       const d = this.disposables.pop();

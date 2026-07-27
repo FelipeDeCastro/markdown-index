@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { HeadingNode } from './headingParser';
-import { HeadingTreeProvider } from './headingProvider';
+import { HeadingTreeProvider, isMarkdownDocument } from './headingProvider';
 import { MarkdownPreviewPanel } from './previewPanel';
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -14,6 +14,74 @@ export function activate(context: vscode.ExtensionContext): void {
   const sidebarTreeView = vscode.window.createTreeView('markdownIndexSidebarView', {
     treeDataProvider: provider,
   });
+
+  // --- Active Document Resolution ---
+
+  async function getActiveMarkdownDocument(): Promise<vscode.TextDocument | undefined> {
+    // 1. Check active text editor
+    const activeEditor = vscode.window.activeTextEditor;
+    if (activeEditor && isMarkdownDocument(activeEditor.document)) {
+      return activeEditor.document;
+    }
+
+    // 2. Check active custom Markdown preview panel
+    const activePreview = MarkdownPreviewPanel.getActivePreviewPanel();
+    if (activePreview?.getDocument()) {
+      return activePreview.getDocument();
+    }
+
+    // 3. Check active tab in tabGroups (e.g. built-in preview tab or custom editor tab)
+    const activeTab = vscode.window.tabGroups?.activeTabGroup?.activeTab;
+    if (activeTab) {
+      const input = activeTab.input;
+      let uri: vscode.Uri | undefined;
+      if (input instanceof vscode.TabInputText) {
+        uri = input.uri;
+      } else if (input instanceof vscode.TabInputCustom) {
+        uri = input.uri;
+      }
+      if (uri) {
+        try {
+          const doc = await vscode.workspace.openTextDocument(uri);
+          if (isMarkdownDocument(doc)) {
+            return doc;
+          }
+        } catch {
+          // Ignore
+        }
+      }
+    }
+
+    return undefined;
+  }
+
+  let isUpdatingTree = false;
+
+  async function updateTreeForActiveDocument(): Promise<void> {
+    if (isUpdatingTree) {
+      return;
+    }
+    isUpdatingTree = true;
+    try {
+      const doc = await getActiveMarkdownDocument();
+      if (doc) {
+        provider.refresh(doc);
+      } else {
+        const activeEditor = vscode.window.activeTextEditor;
+        if (activeEditor && !isMarkdownDocument(activeEditor.document)) {
+          provider.refresh(activeEditor.document);
+        } else if (
+          !activeEditor &&
+          vscode.window.visibleTextEditors.length === 0 &&
+          MarkdownPreviewPanel.getAllPanels().length === 0
+        ) {
+          provider.clear();
+        }
+      }
+    } finally {
+      isUpdatingTree = false;
+    }
+  }
 
   // --- Helpers ---
 
@@ -74,19 +142,21 @@ export function activate(context: vscode.ExtensionContext): void {
         try {
           const doc = await vscode.workspace.openTextDocument(uri);
           await MarkdownPreviewPanel.createOrShow(context.extensionUri, doc);
+          await updateTreeForActiveDocument();
         } catch (err) {
           // eslint-disable-next-line no-console
           console.error('markdown-index: failed to open preview for uri', uri, err);
         }
       } else {
         await openPreviewForActiveOrVisibleMarkdown();
+        await updateTreeForActiveDocument();
       }
     }),
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('markdownIndex.refresh', () => {
-      provider.refresh(vscode.window.activeTextEditor?.document);
+    vscode.commands.registerCommand('markdownIndex.refresh', async () => {
+      await updateTreeForActiveDocument();
     }),
   );
 
@@ -130,7 +200,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
   );
 
-  // --- Editor tracking ---
+  // --- Editor & Preview tracking ---
 
   let treeDebounceTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -163,24 +233,43 @@ export function activate(context: vscode.ExtensionContext): void {
   };
 
   context.subscriptions.push(
-    vscode.window.onDidChangeActiveTextEditor(async (editor) => {
+    vscode.window.onDidChangeActiveTextEditor(async () => {
       if (provider.filterTerm) {
         provider.setFilter(undefined);
         await vscode.commands.executeCommand('setContext', 'markdownIndex.isFiltered', false);
       }
       await vscode.commands.executeCommand('setContext', 'markdownIndex.allCollapsed', false);
-      provider.refresh(editor?.document);
+      await updateTreeForActiveDocument();
     }),
   );
 
   context.subscriptions.push(
+    MarkdownPreviewPanel.onDidChangeActivePreview(async () => {
+      if (provider.filterTerm) {
+        provider.setFilter(undefined);
+        await vscode.commands.executeCommand('setContext', 'markdownIndex.isFiltered', false);
+      }
+      await vscode.commands.executeCommand('setContext', 'markdownIndex.allCollapsed', false);
+      await updateTreeForActiveDocument();
+    }),
+  );
+
+  if (vscode.window.tabGroups) {
+    context.subscriptions.push(
+      vscode.window.tabGroups.onDidChangeTabs(() => void updateTreeForActiveDocument()),
+      vscode.window.tabGroups.onDidChangeTabGroups(() => void updateTreeForActiveDocument()),
+    );
+  }
+
+  context.subscriptions.push(
     vscode.workspace.onDidChangeTextDocument((event) => {
       // The sidebar/index tree only ever shows one document, so keep its
-      // refresh scoped to the active editor.
-      const activeDoc = vscode.window.activeTextEditor?.document;
-      if (activeDoc && event.document === activeDoc) {
-        scheduleTreeRefresh(activeDoc);
-      }
+      // refresh scoped to the active markdown document.
+      void getActiveMarkdownDocument().then((activeDoc) => {
+        if (activeDoc && event.document.uri.toString() === activeDoc.uri.toString()) {
+          scheduleTreeRefresh(activeDoc);
+        }
+      });
       // Live preview updates apply to whichever document was edited, regardless
       // of which editor is currently active — each open preview panel is
       // independent and should always reflect its own file's latest content.
@@ -190,24 +279,25 @@ export function activate(context: vscode.ExtensionContext): void {
 
   context.subscriptions.push(treeView, sidebarTreeView);
 
-  // Initialize with current editor
-  provider.refresh(vscode.window.activeTextEditor?.document);
+  // Initialize with current active document
+  void updateTreeForActiveDocument();
 
   // Helper to open preview for an active or visible markdown editor.
   async function openPreviewForActiveOrVisibleMarkdown(): Promise<void> {
     try {
-      const isMarkdownEditor = (editor?: vscode.TextEditor) =>
-        !!editor &&
-        (editor.document.languageId === 'markdown' ||
-          editor.document.uri.path.toLowerCase().endsWith('.md'));
+      const activeDoc = await getActiveMarkdownDocument();
+      if (activeDoc) {
+        await MarkdownPreviewPanel.createOrShow(context.extensionUri, activeDoc);
+        return;
+      }
 
       const active = vscode.window.activeTextEditor;
       let targetEditor: vscode.TextEditor | undefined = undefined;
 
-      if (isMarkdownEditor(active)) {
+      if (isMarkdownDocument(active?.document)) {
         targetEditor = active;
       } else {
-        targetEditor = vscode.window.visibleTextEditors.find(isMarkdownEditor);
+        targetEditor = vscode.window.visibleTextEditors.find((e) => isMarkdownDocument(e.document));
       }
 
       if (!targetEditor) {
@@ -229,12 +319,12 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     treeView.onDidChangeVisibility((e) => {
       if (e.visible) {
-        void openPreviewForActiveOrVisibleMarkdown();
+        void openPreviewForActiveOrVisibleMarkdown().then(() => updateTreeForActiveDocument());
       }
     }),
     sidebarTreeView.onDidChangeVisibility((e) => {
       if (e.visible) {
-        void openPreviewForActiveOrVisibleMarkdown();
+        void openPreviewForActiveOrVisibleMarkdown().then(() => updateTreeForActiveDocument());
       }
     }),
   );
