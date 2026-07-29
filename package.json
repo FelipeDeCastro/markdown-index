@@ -77,7 +77,10 @@
         "command": "markdownIndex.openCustomPreview",
         "title": "Open Markdown Preview",
         "category": "Markdown Index",
-        "icon": "$(open-preview)"
+        "icon": {
+          "light": "resources/icon-open-preview-light.svg",
+          "dark": "resources/icon-open-preview-dark.svg"
+        }
       },
       {
         "command": "markdownIndex.openBrowserPreview",
@@ -174,13 +177,25 @@
       "explorer/context": [
         {
           "command": "markdownIndex.openCustomPreview",
-          "when": "resourceLangId == markdown",
+          "when": "resourceLangId == markdown || resourceLangId == skill || resourceLangId == prompt || resourceLangId == instructions || resourceLangId == chatagent",
           "group": "navigation"
         },
         {
           "command": "markdownIndex.openBrowserPreview",
-          "when": "resourceLangId == markdown",
+          "when": "resourceLangId == markdown || resourceLangId == skill || resourceLangId == prompt || resourceLangId == instructions || resourceLangId == chatagent",
           "group": "navigation"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "markdownIndex.openCustomPreview",
+          "when": "resourceLangId == markdown || resourceLangId == skill || resourceLangId == prompt || resourceLangId == instructions || resourceLangId == chatagent",
+          "group": "navigation@1"
+        },
+        {
+          "command": "markdownIndex.openBrowserPreview",
+          "when": "resourceLangId == markdown || resourceLangId == skill || resourceLangId == prompt || resourceLangId == instructions || resourceLangId == chatagent",
+          "group": "navigation@2"
         }
       ]
     },

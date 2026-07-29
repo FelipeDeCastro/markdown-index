@@ -844,19 +844,8 @@ body {
       <span class="ext-toc-title">Index</span>
       <div class="ext-toc-actions">
         <button id="ext-theme-toggle" class="ext-icon-btn" title="Toggle light/dark theme" aria-label="Toggle light/dark theme">
-          <svg id="ext-icon-sun" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="4"></circle>
-            <line x1="12" y1="2" x2="12" y2="4"></line>
-            <line x1="12" y1="20" x2="12" y2="22"></line>
-            <line x1="4.93" y1="4.93" x2="6.34" y2="6.34"></line>
-            <line x1="17.66" y1="17.66" x2="19.07" y2="19.07"></line>
-            <line x1="2" y1="12" x2="4" y2="12"></line>
-            <line x1="20" y1="12" x2="22" y2="12"></line>
-            <line x1="4.93" y1="19.07" x2="6.34" y2="17.66"></line>
-            <line x1="17.66" y1="6.34" x2="19.07" y2="4.93"></line>
-          </svg>
-          <svg id="ext-icon-moon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none">
-            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M8 1.00195C6.61553 1.00195 5.26216 1.4125 4.11101 2.18167C2.95987 2.95084 2.06266 4.04409 1.53285 5.32317C1.00303 6.60225 0.864412 8.00972 1.13451 9.36759C1.4046 10.7255 2.07129 11.9727 3.05026 12.9517C4.02922 13.9307 5.27651 14.5974 6.63437 14.8675C7.99224 15.1375 9.3997 14.9989 10.6788 14.4691C11.9579 13.9393 13.0511 13.0421 13.8203 11.8909C14.5895 10.7398 15 9.38642 15 8.00195C15 6.14544 14.2625 4.36496 12.9498 3.05221C11.637 1.73945 9.85652 1.00195 8 1.00195ZM8 14.002V2.00195C9.5913 2.00195 11.1174 2.63409 12.2426 3.75931C13.3679 4.88453 14 6.41065 14 8.00195C14 9.59325 13.3679 11.1194 12.2426 12.2446C11.1174 13.3698 9.5913 14.002 8 14.002Z"></path>
           </svg>
         </button>
         <button id="ext-print" class="ext-icon-btn" title="Print / Save PDF" aria-label="Print or save as PDF">
@@ -1074,8 +1063,6 @@ body {
   (async function () {
     const htmlEl = document.documentElement;
     const content = document.getElementById('ext-content');
-    const sunIcon = document.getElementById('ext-icon-sun');
-    const moonIcon = document.getElementById('ext-icon-moon');
     const rawHtml = content.innerHTML;
 
     function mermaidThemeFor(theme) {
@@ -1092,8 +1079,6 @@ body {
     function updateTheme(theme) {
       htmlEl.setAttribute('data-theme', theme);
       content.setAttribute('data-theme', theme);
-      sunIcon.style.display = theme === 'dark' ? 'none' : 'block';
-      moonIcon.style.display = theme === 'dark' ? 'block' : 'none';
     }
 
     updateTheme(content.getAttribute('data-theme'));
@@ -1416,26 +1401,13 @@ body {
 <body>
   <div class="mi-toolbar">
     <button id="mi-theme-toggle" class="mi-icon-btn" title="Toggle light/dark theme">
-      <svg id="mi-icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="4"></circle>
-        <line x1="12" y1="2" x2="12" y2="4"></line>
-        <line x1="12" y1="20" x2="12" y2="22"></line>
-        <line x1="4.93" y1="4.93" x2="6.34" y2="6.34"></line>
-        <line x1="17.66" y1="17.66" x2="19.07" y2="19.07"></line>
-        <line x1="2" y1="12" x2="4" y2="12"></line>
-        <line x1="20" y1="12" x2="22" y2="12"></line>
-        <line x1="4.93" y1="19.07" x2="6.34" y2="17.66"></line>
-        <line x1="17.66" y1="6.34" x2="19.07" y2="4.93"></line>
-      </svg>
-      <svg id="mi-icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none">
-        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+        <path d="M8 1.00195C6.61553 1.00195 5.26216 1.4125 4.11101 2.18167C2.95987 2.95084 2.06266 4.04409 1.53285 5.32317C1.00303 6.60225 0.864412 8.00972 1.13451 9.36759C1.4046 10.7255 2.07129 11.9727 3.05026 12.9517C4.02922 13.9307 5.27651 14.5974 6.63437 14.8675C7.99224 15.1375 9.3997 14.9989 10.6788 14.4691C11.9579 13.9393 13.0511 13.0421 13.8203 11.8909C14.5895 10.7398 15 9.38642 15 8.00195C15 6.14544 14.2625 4.36496 12.9498 3.05221C11.637 1.73945 9.85652 1.00195 8 1.00195ZM8 14.002V2.00195C9.5913 2.00195 11.1174 2.63409 12.2426 3.75931C13.3679 4.88453 14 6.41065 14 8.00195C14 9.59325 13.3679 11.1194 12.2426 12.2446C11.1174 13.3698 9.5913 14.002 8 14.002Z"></path>
       </svg>
     </button>
     <button id="mi-open-browser" title="View on External Browser">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-        <polyline points="15 3 21 3 21 9"></polyline>
-        <line x1="10" y1="14" x2="21" y2="3"></line>
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+        <path d="M8 1C4.141 1 1 4.141 1 8C1 11.859 4.141 15 8 15C11.859 15 15 11.859 15 8C15 4.141 11.859 1 8 1ZM8 14C7.422 14 6.686 12.906 6.288 11H9.713C9.315 12.906 8.579 14 8.001 14H8ZM6.121 10C6.044 9.392 6 8.723 6 8C6 7.277 6.044 6.608 6.121 6H9.878C9.955 6.608 9.999 7.277 9.999 8C9.999 8.723 9.955 9.392 9.878 10H6.121ZM2 8C2 7.299 2.121 6.626 2.343 6H5.121C5.041 6.656 5 7.332 5 8C5 8.668 5.041 9.344 5.121 10H2.343C2.121 9.374 2 8.701 2 8ZM8 2C8.578 2 9.314 3.094 9.712 5H6.287C6.685 3.094 7.422 2 8 2ZM10.879 6H13.657C13.879 6.626 14 7.299 14 8C14 8.701 13.879 9.374 13.657 10H10.879C10.959 9.344 11 8.668 11 8C11 7.332 10.959 6.656 10.879 6ZM13.195 5H10.722C10.516 3.938 10.199 2.98 9.775 2.268C11.228 2.719 12.446 3.707 13.195 5ZM6.226 2.268C5.802 2.98 5.484 3.938 5.279 5H2.806C3.556 3.707 4.774 2.718 6.226 2.268ZM2.805 11H5.278C5.484 12.062 5.801 13.02 6.225 13.732C4.772 13.281 3.554 12.293 2.805 11ZM9.774 13.732C10.198 13.02 10.516 12.062 10.721 11H13.194C12.444 12.293 11.226 13.282 9.774 13.732Z"></path>
       </svg>
     </button>
     <button id="mi-print" title="Print / Save PDF">
@@ -1451,8 +1423,6 @@ body {
     (function () {
       const vscode = acquireVsCodeApi();
       const content = document.getElementById('mi-content');
-      const sunIcon = document.getElementById('mi-icon-sun');
-      const moonIcon = document.getElementById('mi-icon-moon');
       // Preserved so mermaid diagrams (which mermaid.run() destructively
       // replaces with rendered SVG) can be re-parsed from source whenever the
       // theme changes, without a round-trip to the extension host.
@@ -1467,11 +1437,6 @@ body {
         await mermaid.run({ querySelector: '#mi-content pre.mermaid' });
       }
 
-      function updateThemeIcon(theme) {
-        sunIcon.style.display = theme === 'dark' ? 'none' : 'block';
-        moonIcon.style.display = theme === 'dark' ? 'block' : 'none';
-      }
-      updateThemeIcon(content.getAttribute('data-theme'));
       renderMermaid(content.getAttribute('data-theme'));
 
       document.getElementById('mi-theme-toggle').addEventListener('click', () => {
@@ -1480,7 +1445,6 @@ body {
         // it has no diagram source left to re-parse (it already became SVG).
         content.innerHTML = currentRawHtml;
         content.setAttribute('data-theme', next);
-        updateThemeIcon(next);
         renderMermaid(next);
         vscode.postMessage({ type: 'setTheme', theme: next });
       });
@@ -1561,7 +1525,6 @@ body {
           content.innerHTML = currentRawHtml;
           content.setAttribute('data-theme', message.theme);
           renderMermaid(message.theme);
-          updateThemeIcon(message.theme);
         }
       });
     }());
