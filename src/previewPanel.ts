@@ -1,4 +1,5 @@
 import * as crypto from 'crypto';
+import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -33,6 +34,98 @@ function resolveTheme(pref: PreviewTheme): ResolvedTheme {
   return kind === vscode.ColorThemeKind.Light || kind === vscode.ColorThemeKind.HighContrastLight
     ? 'light'
     : 'dark';
+}
+
+/** Formats a Date as an exact, locale-aware timestamp down to the minute (e.g. "Jul 29, 2026, 4:32 PM"). */
+function formatExactTimestamp(date: Date): string {
+  return date.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+interface GitFileInfo {
+  githubUrl?: string;
+  branch?: string;
+  /** true = local matches last-known remote state, false = diverged/uncommitted, undefined = unknown (e.g. no upstream). */
+  inSync?: boolean;
+  syncDetail: string;
+}
+
+/** Runs a git command, returning trimmed stdout, or null if it fails (e.g. not a repo, git not installed). */
+function runGit(args: string[], cwd: string): string | null {
+  try {
+    return execFileSync('git', args, { cwd, timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'] })
+      .toString('utf8')
+      .trim();
+  } catch {
+    return null;
+  }
+}
+
+/** Converts a git remote URL (SSH or HTTPS) into a github.com https base URL, or null if not GitHub. */
+function githubBaseUrlFromRemote(remoteUrl: string): string | null {
+  const sshMatch = remoteUrl.match(/^git@github\.com:(.+?)(\.git)?$/);
+  if (sshMatch) {
+    return `https://github.com/${sshMatch[1]}`;
+  }
+  const httpsMatch = remoteUrl.match(/^https?:\/\/github\.com\/(.+?)(\.git)?$/);
+  if (httpsMatch) {
+    return `https://github.com/${httpsMatch[1]}`;
+  }
+  return null;
+}
+
+/**
+ * Looks up the file's GitHub location (if the repo has a github.com origin remote)
+ * and whether the local working copy is in sync with the last-known remote state.
+ * Never performs a network fetch — "in sync" is relative to the last time the
+ * remote-tracking ref was updated (e.g. by a manual `git fetch`/`pull`).
+ */
+function getGitFileInfo(filePath: string): GitFileInfo | null {
+  const cwd = path.dirname(filePath);
+  const repoRoot = runGit(['rev-parse', '--show-toplevel'], cwd);
+  if (!repoRoot) {
+    return null;
+  }
+
+  const remoteUrl = runGit(['config', '--get', 'remote.origin.url'], cwd);
+  const branch = runGit(['rev-parse', '--abbrev-ref', 'HEAD'], cwd) || undefined;
+  const relPath = path.relative(repoRoot, filePath).split(path.sep).join('/');
+
+  const info: GitFileInfo = { branch, syncDetail: 'Not tracked by a GitHub remote' };
+
+  if (remoteUrl) {
+    const base = githubBaseUrlFromRemote(remoteUrl);
+    if (base && branch && branch !== 'HEAD') {
+      const encodedPath = relPath.split('/').map(encodeURIComponent).join('/');
+      info.githubUrl = `${base}/blob/${encodeURIComponent(branch)}/${encodedPath}`;
+    }
+  }
+
+  const statusOut = runGit(['status', '--porcelain', '--', relPath], repoRoot);
+  const hasLocalChanges = !!statusOut;
+  const localHead = runGit(['rev-parse', 'HEAD'], cwd);
+  const upstreamHead = runGit(['rev-parse', '@{u}'], cwd);
+
+  if (hasLocalChanges) {
+    info.inSync = false;
+    info.syncDetail = 'Uncommitted local changes';
+  } else if (upstreamHead === null) {
+    info.inSync = undefined;
+    info.syncDetail = 'No upstream branch configured';
+  } else if (localHead && localHead === upstreamHead) {
+    info.inSync = true;
+    info.syncDetail = `Up to date with origin/${branch} (as of last fetch)`;
+  } else {
+    info.inSync = false;
+    info.syncDetail = `Local commit differs from origin/${branch} (as of last fetch)`;
+  }
+
+  return info;
 }
 
 /**
@@ -426,6 +519,10 @@ export class MarkdownPreviewPanel {
       .get<PreviewTheme>('previewTheme', 'auto');
     const resolvedTheme = autoPrint ? 'light' : resolveTheme(theme);
 
+    const lastUpdatedText = formatExactTimestamp(fs.statSync(doc.fileName).mtime);
+    const sourcePath = doc.fileName;
+    const gitInfo = getGitFileInfo(doc.fileName);
+
     const previewDir = vscode.Uri.joinPath(extensionUri, 'resources', 'preview').fsPath;
     const css = [
       fs.readFileSync(path.join(previewDir, 'github-markdown.css'), 'utf8'),
@@ -499,6 +596,40 @@ export class MarkdownPreviewPanel {
         }
       }
     }
+
+    const escapeHtml = (s: string) => MarkdownPreviewPanel.md.utils.escapeHtml(s);
+    const githubRowHtml = gitInfo && gitInfo.githubUrl
+      ? `<div class="ext-info-row"><span class="ext-info-label">GitHub</span><a class="ext-info-value ext-info-link" href="${gitInfo.githubUrl}" target="_blank" rel="noopener noreferrer">View on GitHub ↗</a></div>`
+      : '';
+    const syncClass = !gitInfo ? 'unknown' : gitInfo.inSync === true ? 'ok' : gitInfo.inSync === false ? 'diverged' : 'unknown';
+    const syncLabel = !gitInfo ? '● Not a git repository' : gitInfo.inSync === true ? '● In sync' : gitInfo.inSync === false ? '● Out of sync' : '● Unknown';
+    const syncDetail = gitInfo ? gitInfo.syncDetail : 'This file is not inside a git repository';
+    const syncRowHtml = `<div class="ext-info-row"><span class="ext-info-label">Sync status</span><span class="ext-info-value ext-info-sync ext-info-sync-${syncClass}" title="${escapeHtml(syncDetail)}">${syncLabel}</span></div>`;
+
+    const infoModalHtml = `
+  <div class="ext-info-modal-overlay" id="ext-info-overlay">
+    <div class="ext-info-modal" role="dialog" aria-modal="true" aria-labelledby="ext-info-title">
+      <div class="ext-info-modal-header">
+        <span id="ext-info-title">File Information</span>
+        <button class="ext-info-modal-close" id="ext-info-close" aria-label="Close">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 8.707l3.646 3.647.708-.708L8.707 8l3.647-3.646-.708-.708L8 7.293 4.354 3.646l-.708.708L7.293 8l-3.647 3.646.708.708L8 8.707z"></path></svg>
+        </button>
+      </div>
+      <div class="ext-info-modal-body">
+        <div class="ext-info-row">
+          <span class="ext-info-label">Last updated</span>
+          <span class="ext-info-value">${escapeHtml(lastUpdatedText)}</span>
+        </div>
+        <div class="ext-info-row">
+          <span class="ext-info-label">Source file</span>
+          <span class="ext-info-value ext-info-path">${escapeHtml(sourcePath)}</span>
+        </div>
+        ${githubRowHtml}
+        ${syncRowHtml}
+      </div>
+    </div>
+  </div>
+`;
 
     const htmlContent = `<!DOCTYPE html>
 <html lang="en" data-theme="${resolvedTheme}">
@@ -703,6 +834,95 @@ body {
   opacity: 0.5;
   font-style: italic;
 }
+/* ── Info modal ────────────────────────────────────────── */
+.ext-info-modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 2000;
+  align-items: center;
+  justify-content: center;
+}
+.ext-info-modal-overlay.visible {
+  display: flex;
+}
+.ext-info-modal {
+  background-color: var(--bgColor-default, #ffffff);
+  color: var(--fgColor-default, #1f2328);
+  border: 1px solid var(--borderColor-default, #d1d9e0);
+  border-radius: 8px;
+  width: 420px;
+  max-width: calc(100vw - 48px);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+.ext-info-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--borderColor-default, #d1d9e0);
+  font-size: 14px;
+  font-weight: 600;
+}
+.ext-info-modal-close {
+  background: transparent;
+  border: none;
+  color: var(--fgColor-default, #24292f);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+  display: flex;
+  opacity: 0.7;
+}
+.ext-info-modal-close:hover {
+  opacity: 1;
+  background-color: var(--bgColor-neutral-muted, rgba(128, 128, 128, 0.15));
+}
+.ext-info-modal-body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ext-info-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ext-info-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.6;
+}
+.ext-info-value {
+  font-size: 13px;
+  word-break: break-all;
+}
+.ext-info-value.ext-info-path {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+.ext-info-link {
+  color: var(--fgColor-accent, #0969da);
+  text-decoration: none;
+}
+.ext-info-link:hover {
+  text-decoration: underline;
+}
+.ext-info-sync-ok {
+  color: var(--fgColor-success, #1a7f37);
+}
+.ext-info-sync-diverged {
+  color: var(--fgColor-danger, #d1242f);
+}
+.ext-info-sync-unknown {
+  color: var(--fgColor-muted, #59636e);
+}
 /* ── Main content ───────────────────────────────────────── */
 .ext-container {
   flex: 1;
@@ -725,6 +945,9 @@ body {
     color: #1f2328 !important;
   }
   .ext-toc-panel {
+    display: none !important;
+  }
+  .ext-info-modal-overlay {
     display: none !important;
   }
   .ext-container {
@@ -897,6 +1120,11 @@ body {
             <rect x="6" y="14" width="12" height="8"></rect>
           </svg>
         </button>
+        <button id="ext-info" class="ext-icon-btn" title="File information" aria-label="File information">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M8.49902 7.49998C8.49902 7.22384 8.27517 6.99998 7.99902 6.99998C7.72288 6.99998 7.49902 7.22384 7.49902 7.49998V10.5C7.49902 10.7761 7.72288 11 7.99902 11C8.27517 11 8.49902 10.7761 8.49902 10.5V7.49998ZM8.74807 5.50001C8.74807 5.91369 8.41271 6.24905 7.99903 6.24905C7.58535 6.24905 7.25 5.91369 7.25 5.50001C7.25 5.08633 7.58535 4.75098 7.99903 4.75098C8.41271 4.75098 8.74807 5.08633 8.74807 5.50001ZM8 1C4.13401 1 1 4.13401 1 8C1 11.866 4.13401 15 8 15C11.866 15 15 11.866 15 8C15 4.13401 11.866 1 8 1ZM2 8C2 4.68629 4.68629 2 8 2C11.3137 2 14 4.68629 14 8C14 11.3137 11.3137 14 8 14C4.68629 14 2 11.3137 2 8Z"></path>
+          </svg>
+        </button>
       </div>
     </div>
     <div class="ext-toc-body">
@@ -906,6 +1134,7 @@ body {
   <main class="ext-container">
     <article class="markdown-body" id="ext-content" data-theme="${resolvedTheme}">${bodyHtml}</article>
   </main>
+  ${infoModalHtml}
 <script>${mermaidJs}</script>
 <script>
   // Register click handlers synchronously so they always work even if mermaid fails
@@ -1039,6 +1268,33 @@ body {
     // ── Print button ─────────────────────────────────────────
     document.getElementById('ext-print').addEventListener('click', () => {
       window.print();
+    });
+
+    // ── Info modal ────────────────────────────────────────────
+    const infoOverlay = document.getElementById('ext-info-overlay');
+    const infoBtn = document.getElementById('ext-info');
+    const infoClose = document.getElementById('ext-info-close');
+    function openInfoModal() {
+      if (infoOverlay) infoOverlay.classList.add('visible');
+    }
+    function closeInfoModal() {
+      if (infoOverlay) infoOverlay.classList.remove('visible');
+    }
+    if (infoBtn) {
+      infoBtn.addEventListener('click', openInfoModal);
+    }
+    if (infoClose) {
+      infoClose.addEventListener('click', closeInfoModal);
+    }
+    if (infoOverlay) {
+      infoOverlay.addEventListener('click', (event) => {
+        if (event.target === infoOverlay) closeInfoModal();
+      });
+    }
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && infoOverlay && infoOverlay.classList.contains('visible')) {
+        closeInfoModal();
+      }
     });
 
     // ── Content link navigation ──────────────────────────────
