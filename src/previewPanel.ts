@@ -417,6 +417,7 @@ export class MarkdownPreviewPanel {
     }
     visited.add(canonicalKey);
     const doc = await vscode.workspace.openTextDocument(docUri);
+    const fileName = path.basename(doc.fileName);
     const rawText = doc.getText();
     const rawHtml = MarkdownPreviewPanel.md.render(rawText);
     const bodyHtml = resolveImageSrcs(rawHtml, docUri);
@@ -439,10 +440,16 @@ export class MarkdownPreviewPanel {
 
     function renderTocItem(node: HeadingNode, minLevel: number): string {
       const indent = (node.level - minLevel) * 12;
-      const childrenHtml = node.children.length > 0
+      const hasChildren = node.children.length > 0;
+      const childrenHtml = hasChildren
         ? `<ul class="ext-toc-children">${node.children.map(c => renderTocItem(c, minLevel)).join('')}</ul>`
         : '';
-      return `<li class="ext-toc-item" style="padding-left:${indent}px"><a class="ext-toc-link" data-line="${node.line}" data-text="${encodeURIComponent(node.text)}" href="#">${node.text}</a>${childrenHtml}</li>`;
+      const twisty = hasChildren
+        ? `<button class="ext-toc-twisty" aria-label="Toggle" aria-expanded="true">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M10.072 8.024L5.715 12.38l-.618-.618 3.62-3.738-3.62-3.738.618-.618 4.357 4.357z"></path></svg>
+          </button>`
+        : '<span class="ext-toc-twisty-spacer"></span>';
+      return `<li class="ext-toc-item" style="padding-left:${indent}px"><div class="ext-toc-row">${twisty}<a class="ext-toc-link" data-line="${node.line}" data-text="${encodeURIComponent(node.text)}" href="#">${node.text}</a></div>${childrenHtml}</li>`;
     }
 
     const minLevel = headings.length > 0 ? Math.min(...headings.map(h => h.level)) : 1;
@@ -629,9 +636,47 @@ body {
 .ext-toc-item {
   margin: 0;
 }
+.ext-toc-item.collapsed > .ext-toc-children {
+  display: none;
+}
+.ext-toc-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.ext-toc-twisty,
+.ext-toc-twisty-spacer {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+}
+.ext-toc-twisty {
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fgColor-muted, #59636e);
+  opacity: 0.8;
+}
+.ext-toc-twisty:hover {
+  opacity: 1;
+}
+.ext-toc-twisty svg {
+  display: block;
+  transform: rotate(90deg);
+  transition: transform 0.1s ease;
+}
+.ext-toc-item.collapsed > .ext-toc-row .ext-toc-twisty svg {
+  transform: rotate(0deg);
+}
 .ext-toc-link {
   display: block;
-  padding: 3px 12px 3px 12px;
+  flex: 1;
+  min-width: 0;
+  padding: 3px 12px 3px 0;
   font-size: 13px;
   line-height: 1.4;
   color: var(--fgColor-default, #24292f);
@@ -649,11 +694,8 @@ body {
   opacity: 1;
 }
 .ext-toc-link.active {
-  border-left-color: var(--fgColor-accent, #0969da);
   color: var(--fgColor-accent, #0969da);
-  background-color: var(--bgColor-accent-muted, rgba(9,105,218,0.08));
   font-weight: 500;
-  opacity: 1;
 }
 .ext-toc-empty {
   padding: 12px;
@@ -841,7 +883,7 @@ body {
           <line x1="3" y1="18" x2="21" y2="18"></line>
         </svg>
       </button>
-      <span class="ext-toc-title">Index</span>
+      <span class="ext-toc-title" title="${MarkdownPreviewPanel.md.utils.escapeHtml(fileName)}">${MarkdownPreviewPanel.md.utils.escapeHtml(fileName)}</span>
       <div class="ext-toc-actions">
         <button id="ext-theme-toggle" class="ext-icon-btn" title="Toggle light/dark theme" aria-label="Toggle light/dark theme">
           <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
@@ -940,6 +982,18 @@ body {
 
     // ── Active TOC link tracking (scroll spy) ────────────────
     const tocLinks = Array.from(document.querySelectorAll('.ext-toc-link'));
+
+    // ── TOC item collapse/expand (twisty) ────────────────────
+    document.querySelectorAll('.ext-toc-twisty').forEach((btn) => {
+      btn.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const item = btn.closest('.ext-toc-item');
+        const nowCollapsed = !item.classList.contains('collapsed');
+        item.classList.toggle('collapsed', nowCollapsed);
+        btn.setAttribute('aria-expanded', String(!nowCollapsed));
+      });
+    });
     function updateActiveTocLink() {
       const headingEls = Array.from(content.querySelectorAll('h1,h2,h3,h4,h5,h6'));
       let active = null;
