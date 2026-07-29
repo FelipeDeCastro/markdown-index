@@ -2,7 +2,11 @@
 
 A lightweight VS Code extension that displays a **Table of Contents** for the active markdown file, plus a GitHub-styled custom preview with Mermaid diagrams, syntax highlighting, and printing.
 
-![Markdown Index in action](https://raw.githubusercontent.com/FelipeDeCastro/markdown-index/main/resources/screenshot.png)
+![The Markdown Index outline in the Explorer sidebar, the custom preview open in VS Code, the editor toolbar buttons (open preview, preview on browser, print/PDF export), and the file context menu shortcuts for opening the preview](resources/screenshot-editor-toolbar.png)
+*The Markdown Index outline in the Explorer sidebar, the custom preview open side-by-side in VS Code, the editor toolbar buttons for opening the preview, previewing on browser, and printing, plus the right-click context menu shortcuts.*
+
+![The browser preview with its table-of-contents sidebar, theme toggle and print buttons, and rendered markdown including collapsible sections and a Mermaid flowchart](resources/screenshot-browser-preview.png)
+*The GitHub-styled browser preview, with its own table-of-contents sidebar, theme toggle, print button, and rendered content — including collapsible sections and Mermaid diagrams.*
 
 ## Features
 
